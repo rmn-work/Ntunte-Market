@@ -16,10 +16,15 @@ const io = new Server(server, {
   }
 });
 
+// Route de santé (recommandée pour Render)
+app.get('/', (req, res) => {
+  res.status(200).send('Serveur Ntunte en ligne ! 🚀');
+});
+
 // Initialiser les WebSockets pour les enchères
 setupAuctionSocket(io);
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+const PORT = Number(process.env.PORT) || 3000;
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Serveur Ntunte démarré sur le port ${PORT}`);
 });
