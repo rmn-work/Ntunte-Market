@@ -2,7 +2,7 @@ services:
   - type: web
     name: ntunte-backend
     env: node
-    region: frankfurt # Région la plus proche pour l'Afrique de l'Est / Europe
+    region: Africa # Région la plus proche pour l'Afrique de l'Est / Europe
     buildCommand: npm install && npm run build
     startCommand: npm run start
     envVars:
@@ -19,5 +19,5 @@ databases:
   - name: ntunte-db
     databaseName: ntunte_db
     user: ntunte_admin
-    region: frankfurt
+    region: Africa
     plan: free # Ou starter selon tes besoins de production
