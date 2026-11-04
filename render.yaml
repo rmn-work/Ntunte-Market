@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ntunte-backend
+    env: node
+    region: frankfurt # Région la plus proche pour l'Afrique de l'Est / Europe
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ntunte-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false # À renseigner avec l'URL de ton instance Redis sur Render ou Redis Cloud
+
+databases:
+  - name: ntunte-db
+    databaseName: ntunte_db
+    user: ntunte_admin
+    region: frankfurt
+    plan: free # Ou starter selon tes besoins de production

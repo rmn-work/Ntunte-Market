@@ -1,0 +1,15 @@
+### 1. Test d'inscription d'un utilisateur (Statut initial: PENDING_VERIFICATION - Bloqué)
+POST http://localhost:5000/api/users/register
+Content-Type: application/json
+
+{
+  "phone_number": "+25779123456",
+  "email": "nkurunziza@example.com",
+  "password": "SecurePassword123!",
+  "full_name": "Nkurunziza",
+  "id_card_url": "https://storage.ntunte.se/ids/user_123.jpg"
+}
+
+### 2. Test de consultation du profil (Bloqué ou en attente tant que KYC != VERIFIED)
+GET http://localhost:5000/api/users/profile
+Authorization: Bearer <TON_TOKEN_JWT_ICI>

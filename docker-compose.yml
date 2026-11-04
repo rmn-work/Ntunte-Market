@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # 1. Base de données PostgreSQL avec l'extension PostGIS
+  postgres:
+    image: postgis/postgis:15-3.3-alpine
+    container_name: ntunte_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ntunte_db
+      POSTGRES_USER: ntunte_admin
+      POSTGRES_PASSWORD: secure_password_123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/init_schema.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # 2. Redis pour la gestion des WebSockets et du cache des enchères
+  redis:
+    image: redis:7-alpine
+    container_name: ntunte_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # 3. Backend API Express / Socket.io
+  backend:
+    build:
+      context: ./ntunte-backend
+      dockerfile: Dockerfile
+    container_name: ntunte_backend
+    restart: always
+    ports:
+      - "5001:5000"
+    environment:
+      PORT: 5000
+      DATABASE_URL: postgresql://ntunte_admin:secure_password_123@postgres:5432/ntunte_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your_super_secret_jwt_key
+      LUMICASH_API_KEY: your_lumicash_key
+      ECOCASH_API_KEY: your_ecocash_key
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  postgres_data:
+  redis_data:
