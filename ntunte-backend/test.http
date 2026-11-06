@@ -1,4 +1,8 @@
-### 1. Test d'inscription d'un utilisateur (Statut initial: PENDING_VERIFICATION - Bloqué)
+### ==========================================
+### 1. TESTS EN LOCAL (Docker Localhost)
+### ==========================================
+
+### 1.1 Inscription d'un utilisateur (Statut initial: PENDING_VERIFICATION)
 POST http://localhost:5000/api/users/register
 Content-Type: application/json
 
@@ -7,9 +11,36 @@ Content-Type: application/json
   "email": "nkurunziza@example.com",
   "password": "SecurePassword123!",
   "full_name": "Nkurunziza",
-  "id_card_url": "https://storage.ntunte.se/ids/user_123.jpg"
+  "id_card_url": "https://storage.ntunte.bi/ids/user_123.jpg"
 }
 
-### 2. Test de consultation du profil (Bloqué ou en attente tant que KYC != VERIFIED)
-GET http://localhost:5000/api/users/profile
-Authorization: Bearer <TON_TOKEN_JWT_ICI>
+### 1.2 Tentative d'accès à la création d'annonce (Devrait renvoyer 403 - KYC Bloqué)
+POST http://localhost:5000/api/listings
+Content-Type: application/json
+Authorization: Bearer <VOTRE_TOKEN_JWT>
+
+{
+  "title": "Téléphone Tecno Camon 19",
+  "description": "Très bon état, 128GB",
+  "category": "smartphone",
+  "sale_type": "DIRECT",
+  "starting_price": 350000
+}
+
+
+
+### ==========================================
+### 2. TESTS EN PRODUCTION (Render Cloud)
+### ==========================================
+
+### 2.1 Inscription d'un utilisateur sur Render
+POST https://ntunte-backend.onrender.com/api/users/register
+Content-Type: application/json
+
+{
+  "phone_number": "+25779999999",
+  "email": "prod_user@example.com",
+  "password": "SecurePassword123!",
+  "full_name": "Test Prod User",
+  "id_card_url": "https://storage.ntunte.bi/ids/user_prod.jpg"
+}

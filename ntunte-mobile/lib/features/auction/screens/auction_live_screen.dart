@@ -33,8 +33,8 @@ class _AuctionLiveScreenState extends State<AuctionLiveScreen> {
   }
 
   void _initWebSocket() {
-    // Connexion au serveur Node.js Ntunte
-    socket = IO.io('http://YOUR_BACKEND_IP:5000', <String, dynamic>{
+    // Connexion au serveur Node.js Ntunte déployé sur Render[cite: 1, 2]
+    socket = IO.io('https://ntunte-backend.onrender.com', <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
     });
@@ -42,12 +42,12 @@ class _AuctionLiveScreenState extends State<AuctionLiveScreen> {
     socket.connect();
 
     socket.onConnect((_) {
-      print('Connecté au serveur WebSocket des enchères');
+      print('Connecté au serveur WebSocket des enchères en direct');
       // Rejoindre la salle de l'enchère spécifique
       socket.emit('join_auction', widget.listingId);
     });
 
-    // Écouter les nouvelles enchères en direct
+    // Écouter les nouvelles enchères en direct diffusées par le serveur[cite: 1]
     socket.on('new_bid_broadcast', (data) {
       if (mounted) {
         setState(() {
@@ -57,14 +57,14 @@ class _AuctionLiveScreenState extends State<AuctionLiveScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Nouvelle enchère placée en direct !"),
-            backgroundColor: Colors.green,
+            backgroundColor: Colors.teal,
             duration: Duration(seconds: 2),
           ),
         );
       }
     });
 
-    // Gérer les erreurs de soumission d'enchère
+    // Gérer les erreurs de soumission d'enchère renvoyées par le backend
     socket.on('bid_error', (data) {
       if (mounted) {
         setState(() {
@@ -78,12 +78,12 @@ class _AuctionLiveScreenState extends State<AuctionLiveScreen> {
     final double? bidAmount = double.tryParse(_bidController.text);
     if (bidAmount == null || bidAmount <= currentHighestBid) {
       setState(() {
-        errorMessage = "Votre offre doit être supérieure à $currentHighestBid BIF";
+        errorMessage = "Votre offre doit être supérieure à ${currentHighestBid.toStringAsFixed(0)} BIF";
       });
       return;
     }
 
-    // Émission de l'événement d'enchère
+    // Émission de l'événement d'enchère vers le serveur WebSocket[cite: 1]
     socket.emit('place_bid', {
       'listingId': widget.listingId,
       'userId': widget.currentUserId,
@@ -134,8 +134,11 @@ class _AuctionLiveScreenState extends State<AuctionLiveScreen> {
             if (errorMessage != null)
               Container(
                 padding: const EdgeInsets.all(10),
-                color: Colors.red.shade100,
-                child: Text(errorMessage!, style: const TextStyle(color: Colors.red)),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(errorMessage!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500)),
               ),
             const SizedBox(height: 16),
             TextField(
