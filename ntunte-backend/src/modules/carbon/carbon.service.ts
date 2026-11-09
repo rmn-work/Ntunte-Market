@@ -16,7 +16,7 @@ export class CarbonService {
   /**
    * Calcule le CO2 épargné lors de la vente/achat d'un article de seconde main.
    */
-  static calculateCarbonSaved(category: string): number {
+  static async calculateSavings(category: string): Promise<number> {
     const normalizedCategory = category.toLowerCase().trim();
     const savedKg = this.carbonFactors[normalizedCategory] || this.carbonFactors['autre'];
     return savedKg;
@@ -45,7 +45,7 @@ export class CarbonService {
       detectedCategory = 'electroenager';
     }
 
-    const carbonSavedKg = this.calculateCarbonSaved(detectedCategory);
+    const carbonSavedKg = await this.calculateSavings(detectedCategory);
 
     const ecoTips: Record<string, string> = {
       'smartphones': "Acheter un téléphone d'occasion évite l'extraction de métaux rares et préserve la planète.",
@@ -68,7 +68,7 @@ export class CarbonService {
    * 2. Incrémente le compteur écologique sur le profil utilisateur et renvoie les équivalences écologiques.
    */
   static async registerCarbonSavingsForUser(userId: number, listingCategory: string, customCarbonAmount?: number) {
-    const carbonAmount = customCarbonAmount || this.calculateCarbonSaved(listingCategory);
+    const carbonAmount = customCarbonAmount || (await this.calculateSavings(listingCategory));
 
     const updateQuery = `
       UPDATE users

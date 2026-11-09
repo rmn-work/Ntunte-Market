@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 // Importez votre pool de connexion PostgreSQL configuré (ex: pg pool)
-import pool from '../../config/database';
+import { pool } from '../../config/database';
 
 const router = Router();
 
