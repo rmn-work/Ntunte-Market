@@ -6,9 +6,9 @@ export interface SearchFilters {
   saleType?: 'DIRECT' | 'AUCTION';
   minPrice?: number;
   maxPrice?: number;
-  latitude?: number;
-  longitude?: number;
-  radiusKm?: number;
+  latitude?: number;  // Latitude de l'utilisateur (ex: -3.3822 pour Bujumbura)
+  longitude?: number; // Longitude de l'utilisateur (ex: 29.3644)
+  radiusKm?: number;  // Rayon de recherche en km
   page?: number;
   limit?: number;
 }
@@ -24,7 +24,7 @@ export class SearchService {
       maxPrice,
       latitude,
       longitude,
-      radiusKm = 10,
+      radiusKm = 10, // Rayon par défaut de 10 km
       page = 1,
       limit = 20
     } = filters;
@@ -116,7 +116,7 @@ export class SearchService {
       page,
       limit,
       results_count: result.rows.length,
-      listings: result.rows
+      listings: Array.isArray(result.rows) ? result.rows : [] // <-- Garantit un tableau quoi qu'il arrive
     };
   }
 }
