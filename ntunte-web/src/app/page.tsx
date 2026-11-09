@@ -1,6 +1,13 @@
 import Link from 'next/link';
 
-async function getListings() {
+// Définition de l'interface pour une annonce
+interface Listing {
+  id: string | number;
+  title: string;
+  starting_price: number;
+}
+
+async function getListings(): Promise<Listing[]> {
   try {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
     const res = await fetch(`${apiUrl}/api/listings`, {
@@ -21,7 +28,7 @@ async function getListings() {
 }
 
 export default async function Home() {
-  const listings = await getListings();
+  const listings: Listing[] = await getListings();
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
@@ -38,7 +45,7 @@ export default async function Home() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {listings.map((listing) => (
+            {listings.map((listing: Listing) => (
               <div key={listing.id} className="bg-white p-4 rounded-xl shadow border">
                 <h3 className="font-bold text-lg">{listing.title}</h3>
                 <p className="text-green-600 font-semibold mt-2">{listing.starting_price} BIF</p>
