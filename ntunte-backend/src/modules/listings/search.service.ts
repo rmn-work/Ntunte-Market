@@ -33,7 +33,7 @@ export class SearchService {
     const queryParams: any[] = [];
     let paramIndex = 1;
 
-    // Construction dynamique de la requête SQL (current_highest_bid retiré)
+    // Construction dynamique de la requête SQL (colonnes non migrées en production retirées)
     let sql = `
       SELECT
         id,
@@ -43,7 +43,6 @@ export class SearchService {
         category,
         sale_type,
         starting_price,
-        carbon_saved_kg,
         created_at,
         ST_Y(location::geometry) AS latitude,
         ST_X(location::geometry) AS longitude
