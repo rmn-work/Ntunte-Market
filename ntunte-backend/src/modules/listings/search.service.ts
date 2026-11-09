@@ -6,9 +6,9 @@ export interface SearchFilters {
   saleType?: 'DIRECT' | 'AUCTION';
   minPrice?: number;
   maxPrice?: number;
-  latitude?: number;  // Latitude de l'utilisateur (ex: -3.3822 pour Bujumbura)
-  longitude?: number; // Longitude de l'utilisateur (ex: 29.3644)
-  radiusKm?: number;  // Rayon de recherche en km
+  latitude?: number;
+  longitude?: number;
+  radiusKm?: number;
   page?: number;
   limit?: number;
 }
@@ -24,7 +24,7 @@ export class SearchService {
       maxPrice,
       latitude,
       longitude,
-      radiusKm = 10, // Rayon par défaut de 10 km
+      radiusKm = 10,
       page = 1,
       limit = 20
     } = filters;
@@ -33,7 +33,7 @@ export class SearchService {
     const queryParams: any[] = [];
     let paramIndex = 1;
 
-    // Construction dynamique de la requête SQL (colonnes non migrées en production retirées)
+    // Construction dynamique de la requête SQL (sans les colonnes manquantes)
     let sql = `
       SELECT
         id,
@@ -55,7 +55,8 @@ export class SearchService {
       paramIndex += 2;
     }
 
-    sql += ` FROM listings WHERE status = 'ACTIVE'`;
+    // Suppression de la condition WHERE status = 'ACTIVE' absente en production
+    sql += ` FROM listings WHERE 1=1`;
 
     // Filtre par mot-clé (Recherche dans le titre ou la description)
     if (keyword) {
