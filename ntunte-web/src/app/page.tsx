@@ -21,9 +21,13 @@ async function getListings(): Promise<{ listings: Listing[]; debugInfo: string }
     }
 
     const json = await res.json();
+
+    // Récupération sécurisée du tableau listings renvoyé par le backend
+    const listingsArray = json.listings || json.data || [];
+
     return {
-      listings: json.data || [],
-      debugInfo: `Succès ! URL contactée : ${targetUrl}`
+      listings: Array.isArray(listingsArray) ? listingsArray : [],
+      debugInfo: `Succès ! URL contactée : ${targetUrl} (Annonces trouvées : ${listingsArray.length})`
     };
   } catch (error: any) {
     const errorMsg = `Échec de l'URL [${targetUrl}] : ${error.message}`;
@@ -53,7 +57,7 @@ export default async function Home() {
 
         {listings.length === 0 ? (
           <div className="p-6 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800">
-            <p className="font-semibold">Aucune annonce trouvée ou serveur en cours de diagnostic...</p>
+            <p className="font-semibold">Aucune annonce trouvée ou serveur en cours de réveil...</p>
             <p className="text-sm mt-1">Vérifiez l'URL de l'API affichée dans le bloc bleu ci-dessus.</p>
           </div>
         ) : (
