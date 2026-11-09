@@ -1,15 +1,36 @@
 import { Router, Request, Response } from 'express';
-// Importez votre pool de connexion PostgreSQL configuré (ex: pg pool)
 import { pool } from '../../config/database';
 
 const router = Router();
 
 /**
+ * GET /api/listings
+ * Récupère la liste de toutes les annonces
+ */
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, title, description, starting_price, category, sale_type FROM listings ORDER BY id DESC'
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows,
+    });
+  } catch (error: any) {
+    console.error("Erreur lors de la récupération des annonces :", error.message);
+    return res.status(500).json({
+      success: false,
+      error: "Erreur interne du serveur"
+    });
+  }
+});
+
+/**
  * GET /api/listings/nearby
- * Paramètres de requête attendus :
- * - lat : Latitude de l'utilisateur (ex: -3.3822 pour Bujumbura)
- * - lng : Longitude de l'utilisateur (ex: 29.3644 pour Bujumbura)
- * - radius : Rayon de recherche en kilomètres (optionnel, défaut 20 km)
+ * Recherche géolocalisée avec PostGIS
+ * Paramètres : lat, lng, radius (optionnel, défaut 20 km)
  */
 router.get('/nearby', async (req: Request, res: Response) => {
   try {
@@ -26,7 +47,6 @@ router.get('/nearby', async (req: Request, res: Response) => {
     const userLng = parseFloat(lng as string);
     const radiusKm = parseFloat(radius as string);
 
-    // Requête PostGIS optimisée avec l'index spatial GIST
     const query = `
       SELECT
         id,
@@ -49,15 +69,13 @@ router.get('/nearby', async (req: Request, res: Response) => {
       ORDER BY distance_km ASC;
     `;
 
-    // Note : $1 = Longitude, $2 = Latitude, $3 = Rayon en mètres ($3 * 1000)
     const values = [userLng, userLat, radiusKm];
-
     const result = await pool.query(query, values);
 
     return res.status(200).json({
       success: true,
       count: result.rows.length,
-      data: result.rows, // Liste des annonces triées de la plus proche à la plus lointaine avec leur distance en km
+      data: result.rows,
     });
 
   } catch (error: any) {
