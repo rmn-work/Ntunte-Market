@@ -1,18 +1,20 @@
-import './globals.css'
+import './globals.css';
 
 export const metadata = {
-  title: 'Ntunte Market',
-  description: 'Plateforme E-Commerce',
-}
+  title: 'Ntunte Marketplace',
+  description: 'Achetez, vendez et enchérissez au Burundi',
+};
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body>
+        {children}
+      </body>
     </html>
-  )
+  );
 }
