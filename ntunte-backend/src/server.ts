@@ -1,14 +1,7 @@
-import 'dotenv/config';
-import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
-import cors from 'cors';
+import app from './app';
 import { setupAuctionSocket } from './modules/auctions/auction.gateway';
-import userRoutes from './modules/users/user.routes';
-
-const app = express();
-app.use(cors());
-app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -17,14 +10,6 @@ const io = new Server(server, {
     methods: ["GET", "POST"]
   }
 });
-
-// Route de santé
-app.get('/', (req, res) => {
-  res.status(200).send('Serveur Ntunte en ligne ! 🚀');
-});
-
-// Montage des routes
-app.use('/api/users', userRoutes);
 
 // Initialiser les WebSockets pour les enchères
 setupAuctionSocket(io);
