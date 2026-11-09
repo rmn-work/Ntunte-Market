@@ -1,8 +1,10 @@
 import Link from 'next/link';
 
 async function getListings() {
-  // Appel de l'API Backend Node.js de Ntunte
-  const res = await fetch('http://localhost:5000/api/listings', { cache: 'no-store' });
+  // Utilise l'URL de production Render en secours direct au lieu de localhost
+  const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
+
+  const res = await fetch(`${apiUrl}/api/listings`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Impossible de charger les annonces.');
   return res.json();
 }

@@ -1,23 +1,19 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 
-# Copier les fichiers de dépendances
+# Copier les fichiers de dépendances depuis ntunte-web
 COPY ntunte-web/package*.json ./
 RUN npm install
 
-# Copier le code source de ntunte-web
+# Copier tout le code de ntunte-web dans /app
 COPY ntunte-web/ ./
-
-# S'assurer que le dossier public existe (création automatique s'il est absent)
-RUN mkdir -p public
-
 RUN npm run build
 
 FROM node:18-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copier les éléments générés
+# Copier les dossiers nécessaires générés par le build
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static

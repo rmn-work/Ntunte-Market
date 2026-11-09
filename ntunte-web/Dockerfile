@@ -1,25 +1,24 @@
-# 1. Étape de construction (Build)
+# 1. Construction
 FROM node:18-alpine AS builder
 WORKDIR /app
-
 COPY package*.json ./
 RUN npm install
-
 COPY . .
 RUN npm run build
 
-# 2. Étape d'exécution en production
+# 2. Exécution
 FROM node:18-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-EXPOSE 3000
+# Render injecte dynamiquement le port
+EXPOSE 10000
+ENV PORT=10000
 
 CMD ["node", "server.js"]
