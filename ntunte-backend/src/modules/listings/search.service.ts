@@ -6,9 +6,9 @@ export interface SearchFilters {
   saleType?: 'DIRECT' | 'AUCTION';
   minPrice?: number;
   maxPrice?: number;
-  latitude?: number;  // Latitude de l'utilisateur (ex: -3.3822 pour Bujumbura)
-  longitude?: number; // Longitude de l'utilisateur (ex: 29.3644)
-  radiusKm?: number;  // Rayon de recherche en km
+  latitude?: number;
+  longitude?: number;
+  radiusKm?: number;
   page?: number;
   limit?: number;
 }
@@ -24,7 +24,7 @@ export class SearchService {
       maxPrice,
       latitude,
       longitude,
-      radiusKm = 10, // Rayon par défaut de 10 km
+      radiusKm = 10,
       page = 1,
       limit = 20
     } = filters;
@@ -33,7 +33,6 @@ export class SearchService {
     const queryParams: any[] = [];
     let paramIndex = 1;
 
-    // Construction dynamique de la requête SQL (sans les colonnes manquantes)
     let sql = `
       SELECT
         id,
@@ -48,38 +47,32 @@ export class SearchService {
         ST_X(location::geometry) AS longitude
     `;
 
-    // Si la géolocalisation est fournie, on calcule la distance en km
     if (latitude !== undefined && longitude !== undefined) {
       sql += `, (ST_DistanceSphere(location, ST_MakePoint($${paramIndex}, $${paramIndex + 1})) / 1000) AS distance_km`;
       queryParams.push(longitude, latitude);
       paramIndex += 2;
     }
 
-    // Suppression de la condition WHERE status = 'ACTIVE' absente en production
     sql += ` FROM listings WHERE 1=1`;
 
-    // Filtre par mot-clé (Recherche dans le titre ou la description)
     if (keyword) {
       sql += ` AND (title ILIKE $${paramIndex} OR description ILIKE $${paramIndex})`;
       queryParams.push(`%${keyword}%`);
       paramIndex++;
     }
 
-    // Filtre par catégorie
     if (category) {
       sql += ` AND category = $${paramIndex}`;
       queryParams.push(category);
       paramIndex++;
     }
 
-    // Filtre par type de vente
     if (saleType) {
       sql += ` AND sale_type = $${paramIndex}`;
       queryParams.push(saleType);
       paramIndex++;
     }
 
-    // Filtre par prix
     if (minPrice !== undefined) {
       sql += ` AND starting_price >= $${paramIndex}`;
       queryParams.push(minPrice);
@@ -91,32 +84,30 @@ export class SearchService {
       paramIndex++;
     }
 
-    // Filtre par distance géographique
     if (latitude !== undefined && longitude !== undefined) {
       const radiusMeters = radiusKm * 1000;
       sql += ` AND ST_DWithin(location::geography, ST_MakePoint($1, $2)::geography, $${paramIndex})`;
       queryParams.push(radiusMeters);
       paramIndex++;
-
-      // Trier par la distance la plus proche
       sql += ` ORDER BY distance_km ASC`;
     } else {
-      // Trier par date la plus récente par défaut
       sql += ` ORDER BY created_at DESC`;
     }
 
-    // Pagination
     sql += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     queryParams.push(limit, offset);
 
     const result = await query(sql, queryParams);
 
+    const rawRows = result?.rows || [];
+    const listingsArray = Array.isArray(rawRows) ? rawRows : Object.values(rawRows);
+
     return {
       success: true,
       page,
       limit,
-      results_count: result.rows.length,
-      listings: Array.isArray(result.rows) ? result.rows : [] // <-- Garantit un tableau quoi qu'il arrive
+      results_count: listingsArray.length,
+      listings: listingsArray
     };
   }
 }
