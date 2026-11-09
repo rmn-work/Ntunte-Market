@@ -1,3 +1,6 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 interface Listing {
@@ -6,41 +9,41 @@ interface Listing {
   starting_price: number;
 }
 
-async function getListings(): Promise<{ listings: Listing[]; debugInfo: string }> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
-  const targetUrl = `${apiUrl}/api/listings`;
+export default function Home() {
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [debugInfo, setDebugInfo] = useState<string>('Connexion au serveur en cours...');
 
-  try {
-    console.log(`Tentative de fetch sur : ${targetUrl}`);
-    const res = await fetch(targetUrl, {
-      cache: 'no-store'
-    });
+  useEffect(() => {
+    async function fetchListings() {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
+      const targetUrl = `${apiUrl}/api/listings`;
 
-    if (!res.ok) {
-      throw new Error(`Erreur HTTP: ${res.status} (${res.statusText}) sur ${targetUrl}`);
+      try {
+        console.log(`Tentative de fetch sur : ${targetUrl}`);
+        const res = await fetch(targetUrl);
+
+        if (!res.ok) {
+          throw new Error(`Erreur HTTP: ${res.status} (${res.statusText})`);
+        }
+
+        const json = await res.json();
+        const listingsArray = json.listings || json.data || [];
+
+        setListings(Array.isArray(listingsArray) ? listingsArray : []);
+        setDebugInfo(`Succès ! URL contactée : ${targetUrl} (Annonces trouvées : ${listingsArray.length})`);
+      } catch (error: any) {
+        const errorMsg = `Échec de l'URL [${targetUrl}] : ${error.message}`;
+        console.error(errorMsg);
+        setListings([]);
+        setDebugInfo(errorMsg);
+      } finally {
+        setLoading(false);
+      }
     }
 
-    const json = await res.json();
-
-    // Récupération sécurisée du tableau listings renvoyé par le backend
-    const listingsArray = json.listings || json.data || [];
-
-    return {
-      listings: Array.isArray(listingsArray) ? listingsArray : [],
-      debugInfo: `Succès ! URL contactée : ${targetUrl} (Annonces trouvées : ${listingsArray.length})`
-    };
-  } catch (error: any) {
-    const errorMsg = `Échec de l'URL [${targetUrl}] : ${error.message}`;
-    console.error(errorMsg);
-    return {
-      listings: [],
-      debugInfo: errorMsg
-    };
-  }
-}
-
-export default async function Home() {
-  const { listings, debugInfo } = await getListings();
+    fetchListings();
+  }, []);
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
@@ -55,10 +58,14 @@ export default async function Home() {
           </div>
         </header>
 
-        {listings.length === 0 ? (
+        {loading ? (
+          <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 animate-pulse">
+            <p className="font-semibold">Chargement des annonces... (Si le serveur backend sort de veille, cela peut prendre 10 à 20 secondes)</p>
+          </div>
+        ) : listings.length === 0 ? (
           <div className="p-6 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800">
-            <p className="font-semibold">Aucune annonce trouvée ou serveur en cours de réveil...</p>
-            <p className="text-sm mt-1">Vérifiez l'URL de l'API affichée dans le bloc bleu ci-dessus.</p>
+            <p className="font-semibold">Aucune annonce trouvée pour le moment.</p>
+            <p className="text-sm mt-1">Le backend répond correctement, mais la base de données ne contient pas encore d'annonces.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
