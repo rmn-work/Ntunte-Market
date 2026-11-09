@@ -1,34 +1,42 @@
 import Link from 'next/link';
 
-// Définition de l'interface pour une annonce
 interface Listing {
   id: string | number;
   title: string;
   starting_price: number;
 }
 
-async function getListings(): Promise<Listing[]> {
+async function getListings(): Promise<{ listings: Listing[]; debugInfo: string }> {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
+  const targetUrl = `${apiUrl}/api/listings`;
+
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
-    const res = await fetch(`${apiUrl}/api/listings`, {
-      cache: 'no-store' // Désactive le cache pour avoir les données en temps réel
+    console.log(`Tentative de fetch sur : ${targetUrl}`);
+    const res = await fetch(targetUrl, {
+      cache: 'no-store'
     });
 
     if (!res.ok) {
-      throw new Error(`Erreur HTTP: ${res.status}`);
+      throw new Error(`Erreur HTTP: ${res.status} (${res.statusText}) sur ${targetUrl}`);
     }
 
     const json = await res.json();
-    return json.data || [];
+    return {
+      listings: json.data || [],
+      debugInfo: `Succès ! URL contactée : ${targetUrl}`
+    };
   } catch (error: any) {
-    console.error("Échec du chargement des annonces :", error.message);
-    // Retourne un tableau vide pour éviter le crash de la page
-    return [];
+    const errorMsg = `Échec de l'URL [${targetUrl}] : ${error.message}`;
+    console.error(errorMsg);
+    return {
+      listings: [],
+      debugInfo: errorMsg
+    };
   }
 }
 
 export default async function Home() {
-  const listings: Listing[] = await getListings();
+  const { listings, debugInfo } = await getListings();
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
@@ -36,12 +44,17 @@ export default async function Home() {
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-green-700">Ntunte Marketplace</h1>
           <p className="text-gray-600">Achetez, vendez et enchérissez au Burundi.</p>
+
+          {/* Bloc de diagnostic visuel */}
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-sm font-mono">
+            <strong>Diagnostic en direct :</strong> {debugInfo}
+          </div>
         </header>
 
         {listings.length === 0 ? (
           <div className="p-6 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800">
-            <p className="font-semibold">Chargement des annonces ou serveur en cours de réveil...</p>
-            <p className="text-sm mt-1">Si le problème persiste, vérifiez que l'API backend `/api/listings` est bien active.</p>
+            <p className="font-semibold">Aucune annonce trouvée ou serveur en cours de diagnostic...</p>
+            <p className="text-sm mt-1">Vérifiez l'URL de l'API affichée dans le bloc bleu ci-dessus.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
