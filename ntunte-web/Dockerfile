@@ -1,9 +1,9 @@
 # 1. Construction
 FROM node:18-alpine AS builder
 WORKDIR /app
-COPY package*.json ./
+COPY ntunte-web/package*.json ./
 RUN npm install
-COPY . .
+COPY ntunte-web/ ./
 RUN npm run build
 
 # 2. Exécution
@@ -17,7 +17,6 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# Render injecte dynamiquement le port
 EXPOSE 10000
 ENV PORT=10000
 
