@@ -31,7 +31,7 @@ export class AuctionService {
 
     const currentHighest = listing.current_highest_bid || listing.starting_price;
     if (amount <= currentHighest) {
-      throw new Error(`L'enchère doit être supérieure à l'offre actuelle de ${currentHighest} BIF.`);
+      throw new Error(`L'enchère doit être supérieure à l'offre actuelle de ${currentHighest} Fbu.`);
     }
 
     // 2. Enregistrer l'enchère dans la table `bids` et mettre à jour le prix fort

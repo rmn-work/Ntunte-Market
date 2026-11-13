@@ -11,7 +11,7 @@ export class MobileMoneyProvider {
       const response = await axios.post('https://api.lumicash.bi/v1/payment/request', {
         msisdn: phoneNumber,
         amount: amount,
-        currency: 'BIF',
+        currency: 'Fbu',
         external_reference: reference
       }, {
         headers: { 'Authorization': `Bearer ${process.env.LUMICASH_API_KEY}` }

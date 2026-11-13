@@ -19,7 +19,7 @@ clientA.on("connect", () => {
 });
 
 clientA.on("new_bid_broadcast", (data) => {
-  console.log("📢 [Client A reçu] Nouvelle offre la plus haute:", data.current_highest_bid, "BIF");
+  console.log("📢 [Client A reçu] Nouvelle offre la plus haute:", data.current_highest_bid, "Fbu");
 });
 
 // Setup Client B
@@ -29,7 +29,7 @@ clientB.on("connect", () => {
 
   // Client B place une première enchère après 2 secondes
   setTimeout(() => {
-    console.log("🔨 Client B place une offre de 50,000 BIF...");
+    console.log("🔨 Client B place une offre de 50,000 Fbu...");
     clientB.emit("place_bid", {
       listingId: LISTING_ID,
       userId: 102,
@@ -39,7 +39,7 @@ clientB.on("connect", () => {
 
   // Client A surenchérit après 4 secondes
   setTimeout(() => {
-    console.log("🔨 Client A surenchérit à 60,000 BIF...");
+    console.log("🔨 Client A surenchérit à 60,000 Fbu...");
     clientA.emit("place_bid", {
       listingId: LISTING_ID,
       userId: 101,

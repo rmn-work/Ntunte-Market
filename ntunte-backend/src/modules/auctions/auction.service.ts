@@ -11,7 +11,7 @@ export class AuctionService {
 
     const currentHighest = listing.current_highest_bid || listing.starting_price;
     if (amount <= currentHighest) {
-      throw new Error(`Votre enchère doit être supérieure à l'offre actuelle (${currentHighest0} BIF).`);
+      throw new Error(`Votre enchère doit être supérieure à l'offre actuelle (${currentHighest0} Fbu).`);
     }
 
     if (new Date() > new Date(listing.end_time)) {

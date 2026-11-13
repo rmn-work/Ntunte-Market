@@ -1,21 +1,26 @@
 import { Router } from 'express';
 import { searchListingsController } from './search.controller';
-import { pool } from '../../config/database'; // Gardé si vous avez d'autres routes spécifiques (création, etc.)
+import { createListingController } from './listing.controller'; // Assurez-vous que le chemin pointe vers votre contrôleur de création
+import { pool } from '../../config/database';
 
 const router = Router();
 
 /**
  * GET /api/listings
- * Utilise désormais le contrôleur de recherche unifié (gère la liste complète,
- * la recherche par mots-clés, les filtres, la pagination et la géolocalisation PostGIS)
+ * Utilise désormais le contrôleur de recherche unifié (gère la liste complète, etc.)
  */
 router.get('/', searchListingsController);
 
 /**
  * GET /api/listings/nearby
- * (Optionnel si déjà géré par searchListingsController avec lat/lng,
- * mais conservé ici pour rétrocompatibilité avec vos écrans Flutter/Web)
+ * (Optionnel, conservé pour rétrocompatibilité Flutter/Web)
  */
 router.get('/nearby', searchListingsController);
+
+/**
+ * POST /api/listings
+ * Permet d'ajouter un nouveau produit et de mettre à jour la base de données instantanément
+ */
+router.post('/', createListingController);
 
 export default router;
