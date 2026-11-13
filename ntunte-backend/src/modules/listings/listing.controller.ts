@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import pool from '../../config/database'; // Ajustez le chemin selon votre structure
+import { pool } from '../../config/database';
 
 export const createListingController = async (req: Request, res: Response) => {
   try {
