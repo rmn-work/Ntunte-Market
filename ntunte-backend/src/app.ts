@@ -1,57 +1,148 @@
-import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import userRoutes from './modules/users/user.routes';
-import listingRoutes from './modules/listings/listing.routes';
+'use client';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
-const app = express();
+interface Listing {
+  id: number;
+  title: string;
+  description: string;
+  category: string;
+  sale_type: string;
+  starting_price: number;
+  current_highest_bid?: number;
+}
 
-app.use(cors());
-app.use(express.json());
+export default function HomePage() {
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [startingPrice, setStartingPrice] = useState('');
+  const [category, setCategory] = useState('');
+  const [saleType, setSaleType] = useState('AUCTION');
 
-app.get('/', (req, res) => {
-  res.status(200).send('Serveur Ntunte en ligne ! 🚀');
-});
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-// Route pour la politique de confidentialité (requise par Google Play)
-app.get('/privacy', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Politique de Confidentialité - Ntunte Market</title>
-        <style>
-            body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.6; }
-            h1 { color: #111; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-            h3 { color: #444; margin-top: 20px; }
-            p { color: #666; }
-        </style>
-    </head>
-    <body>
-        <h1>Politique de Confidentialité - Ntunte Market</h1>
-        <p><strong>Dernière mise à jour :</strong> Novembre 2026</p>
+  const fetchListings = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/listings`);
+      const data = await res.json();
+      setListings(data);
+    } catch (err) {
+      console.error('Erreur chargement annonces:', err);
+    }
+  };
 
-        <p>Ntunte Market édite l'application mobile <strong>Ntunte</strong>. Cette application est une marketplace permettant de consulter, publier des annonces et placer des enchères au Burundi.</p>
+  useEffect(() => {
+    fetchListings();
+  }, []);
 
-        <h3>1. Données collectées</h3>
-        <p>Nous collectons uniquement les informations de base nécessaires au service : les informations de compte, les annonces publiées et les offres d'enchères que vous effectuez.</p>
+  const handleCreateListing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await fetch(`${API_URL}/api/listings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: 1,
+        title,
+        description,
+        starting_price: parseFloat(startingPrice),
+        category: category || 'general',
+        sale_type: saleType,
+      }),
+    });
+    setTitle('');
+    setDescription('');
+    setStartingPrice('');
+    setCategory('');
+    fetchListings();
+  };
 
-        <h3>2. Utilisation des données</h3>
-        <p>Vos données sont utilisées exclusivement pour assurer le bon fonctionnement du service de mise en relation entre acheteurs et vendeurs.</p>
+  return (
+    <main className="max-w-5xl mx-auto p-6">
+      <h1 className="text-3xl font-bold text-teal-800">Ntunte Marketplace</h1>
+      <p className="text-gray-600 mb-6">Achetez, vendez et enchérissez au Burundi.</p>
 
-        <h3>3. Sécurité</h3>
-        <p>Toutes vos données sont stockées de manière sécurisée et ne sont jamais vendues, louées ou partagées à des tiers à des fins commerciales.</p>
+      {/* Formulaire de publication */}
+      <section className="bg-white p-5 rounded-lg shadow mb-8 border">
+        <h2 className="text-xl font-semibold mb-4">Publier une nouvelle annonce</h2>
+        <form onSubmit={handleCreateListing} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input
+            type="text"
+            placeholder="Titre du produit"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="border p-2 rounded"
+            required
+          />
+          <input
+            type="number"
+            placeholder="Prix de départ (Fbu)"
+            value={startingPrice}
+            onChange={(e) => setStartingPrice(e.target.value)}
+            className="border p-2 rounded"
+            required
+          />
+          <input
+            type="text"
+            placeholder="Catégorie (ex: electronics)"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="border p-2 rounded"
+          />
+          <select
+            value={saleType}
+            onChange={(e) => setSaleType(e.target.value)}
+            className="border p-2 rounded"
+          >
+            <option value="AUCTION">Enchère (Auction)</option>
+            <option value="DIRECT">Vente directe</option>
+          </select>
+          <textarea
+            placeholder="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="border p-2 rounded md:col-span-2"
+            required
+          />
+          <button
+            type="submit"
+            className="bg-teal-600 text-white py-2 px-6 rounded hover:bg-teal-700 md:col-span-2 font-medium"
+          >
+            Publier l'annonce
+          </button>
+        </form>
+      </section>
 
-        <h3>4. Contact</h3>
-        <p>Pour toute question relative à cette politique de confidentialité, vous pouvez nous contacter directement via l'application.</p>
-    </body>
-    </html>
-  `);
-});
+      {/* Liste des annonces avec bouton d'enchère */}
+      <h2 className="text-2xl font-bold mb-4">Annonces disponibles</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {listings.map((item) => {
+          const displayPrice = item.current_highest_bid || item.starting_price;
+          return (
+            <div key={item.id} className="border rounded-lg p-5 shadow-sm bg-white flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-start">
+                  <h3 className="text-xl font-bold">{item.title}</h3>
+                  <span className="text-xs bg-teal-100 text-teal-800 px-2 py-1 rounded">
+                    {item.sale_type === 'AUCTION' ? 'Enchère en cours' : 'Achat direct'}
+                  </span>
+                </div>
+                <p className="text-gray-600 mt-2">{item.description}</p>
+                <p className="text-lg font-bold text-teal-700 mt-4">
+                  Offre actuelle : {Number(displayPrice).toLocaleString()} Fbu
+                </p>
+              </div>
 
-app.use('/api/users', userRoutes);
-app.use('/api/listings', listingRoutes);
-
-export default app;
+              <Link
+                href={`/listings/${item.id}`}
+                className="mt-4 block text-center bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 font-medium"
+              >
+                Enchérir maintenant
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+    </main>
+  );
+}

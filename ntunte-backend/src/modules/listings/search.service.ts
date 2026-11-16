@@ -42,7 +42,9 @@ export class SearchService {
         category,
         sale_type,
         starting_price,
+        current_highest_bid,
         created_at,
+        end_time,
         ST_Y(location::geometry) AS latitude,
         ST_X(location::geometry) AS longitude
     `;

@@ -1,167 +1,127 @@
 import 'package:flutter/material.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:ntunte_mobile/core/network/api_client.dart';
+import 'package:ntunte_mobile/models/listing.dart';
+import 'package:ntunte_mobile/screens/auction_live_screen.dart';
 
-class AuctionLiveScreen extends StatefulWidget {
-  final int listingId;
-  final String title;
-  final double initialPrice;
+class HomeScreen extends StatefulWidget {
   final int currentUserId;
 
-  const AuctionLiveScreen({
-    Key? key,
-    required this.listingId,
-    required this.title,
-    required this.initialPrice,
-    required this.currentUserId,
-  }) : super(key: key);
+  const HomeScreen({Key? key, required this.currentUserId}) : super(key: key);
 
   @override
-  _AuctionLiveScreenState createState() => _AuctionLiveScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _AuctionLiveScreenState extends State<AuctionLiveScreen> {
-  late IO.Socket socket;
-  late double currentHighestBid;
-  final TextEditingController _bidController = TextEditingController();
-  String? errorMessage;
+class _HomeScreenState extends State<HomeScreen> {
+  final ApiClient _apiClient = ApiClient();
+  List<Listing> _listings = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    currentHighestBid = widget.initialPrice;
-    _initWebSocket();
+    _fetchListings();
   }
 
-  void _initWebSocket() {
-    // Connexion au serveur Node.js Ntunte déployé sur Render[cite: 1, 2]
-    socket = IO.io('https://ntunte-backend.onrender.com', <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': false,
-    });
-
-    socket.connect();
-
-    socket.onConnect((_) {
-      print('Connecté au serveur WebSocket des enchères en direct');
-      // Rejoindre la salle de l'enchère spécifique
-      socket.emit('join_auction', widget.listingId);
-    });
-
-    // Écouter les nouvelles enchères en direct diffusées par le serveur[cite: 1]
-    socket.on('new_bid_broadcast', (data) {
-      if (mounted) {
-        setState(() {
-          currentHighestBid = double.parse(data['current_highest_bid'].toString());
-          errorMessage = null;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Nouvelle enchère placée en direct !"),
-            backgroundColor: Colors.teal,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    });
-
-    // Gérer les erreurs de soumission d'enchère renvoyées par le backend
-    socket.on('bid_error', (data) {
-      if (mounted) {
-        setState(() {
-          errorMessage = data['message'];
-        });
-      }
-    });
-  }
-
-  void _placeBid() {
-    final double? bidAmount = double.tryParse(_bidController.text);
-    if (bidAmount == null || bidAmount <= currentHighestBid) {
+  Future<void> _fetchListings() async {
+    try {
+      final response = await _apiClient.dio.get('/api/listings');
+      final List data = response.data;
       setState(() {
-        errorMessage = "Votre offre doit être supérieure à ${currentHighestBid.toStringAsFixed(0)} BIF";
+        _listings = data.map((json) => Listing.fromJson(json)).toList();
+        _isLoading = false;
       });
-      return;
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur de chargement : $e')),
+      );
     }
-
-    // Émission de l'événement d'enchère vers le serveur WebSocket[cite: 1]
-    socket.emit('place_bid', {
-      'listingId': widget.listingId,
-      'userId': widget.currentUserId,
-      'amount': bidAmount,
-    });
-
-    _bidController.clear();
-  }
-
-  @override
-  void dispose() {
-    socket.disconnect();
-    socket.dispose();
-    _bidController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        title: const Text('Ntunte Market'),
         backgroundColor: Colors.teal,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              color: Colors.teal.shade50,
-              elevation: 3,
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  children: [
-                    const Text("Offre Actuelle la plus Haute", style: TextStyle(fontSize: 16)),
-                    const SizedBox(height: 8),
-                    Text(
-                      "${currentHighestBid.toStringAsFixed(0)} BIF",
-                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.teal),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _fetchListings,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: _listings.length,
+                itemBuilder: (context, index) {
+                  final item = _listings[index];
+                  final double activePrice = item.currentHighestBid ?? item.startingPrice;
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    elevation: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.title,
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              Chip(
+                                label: Text(item.saleType == 'AUCTION' ? 'Enchère' : 'Direct'),
+                                backgroundColor: Colors.teal.shade50,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(item.description, style: TextStyle(color: Colors.grey[700])),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Prix actuel : ${activePrice.toStringAsFixed(0)} Fbu',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.teal,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.gavel, color: Colors.white),
+                              label: const Text('Participer à l\'enchère', style: TextStyle(color: Colors.white)),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                              onPressed: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => AuctionLiveScreen(
+                                      listingId: item.id,
+                                      title: item.title,
+                                      initialPrice: activePrice,
+                                      currentUserId: widget.currentUserId,
+                                    ),
+                                  ),
+                                );
+                                // Rafraîchir la liste au retour de l'enchère
+                                _fetchListings();
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 24),
-            if (errorMessage != null)
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(errorMessage!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500)),
-              ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _bidController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Saisir votre enchère (BIF)",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.gavel),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _placeBid,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: const Text("Placer mon enchère", style: TextStyle(fontSize: 18, color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -10,8 +10,8 @@ class ApiClient {
     dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
+        connectTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 60),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -19,19 +19,12 @@ class ApiClient {
       ),
     );
 
-    // Intercepteurs pour l'authentification et la gestion globale des erreurs
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          // Vous pourrez injecter le token JWT ici si l'utilisateur est connecté
-          // const token = "VOTRE_TOKEN_JWT";
-          // if (token.isNotEmpty) {
-          //   options.headers["Authorization"] = "Bearer $token";
-          // }
           return handler.next(options);
         },
         onError: (DioException e, handler) {
-          // Gestion centralisée (ex: intercepter le statut 403 pour le KYC bloqué)
           print("Erreur API [${e.response?.statusCode}] : ${e.message}");
           return handler.next(e);
         },

@@ -1,7 +1,7 @@
 name: ntunte_mobile
 description: "Application mobile Ntunte pour les ventes directes et enchères en temps réel au Burundi."
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.0+20
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
