@@ -1,0 +1,28 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.requireVerifiedKYC = void 0;
+const requireVerifiedKYC = (req, res, next) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentification requise."
+            });
+        }
+        // Règle stricte : Si le KYC n'est pas vérifié, on bloque l'accès aux routes métiers
+        if (user.kycStatus !== 'VERIFIED') {
+            return res.status(403).json({
+                success: false,
+                error_code: "KYC_PENDING_OR_REJECTED",
+                message: "Accès restreint. Vous devez soumettre et faire valider votre pièce d'identité avant d'utiliser Ntunte.",
+                current_status: user.kycStatus
+            });
+        }
+        next();
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: "Erreur interne du serveur middleware KYC." });
+    }
+};
+exports.requireVerifiedKYC = requireVerifiedKYC;

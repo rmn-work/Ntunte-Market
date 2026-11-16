@@ -1,7 +1,7 @@
 import http from 'http';
 import { Server } from 'socket.io';
 import app from './app';
-import pool from './config/database';
+import { pool } from './config/database';
 
 const server = http.createServer(app);
 const io = new Server(server, {
