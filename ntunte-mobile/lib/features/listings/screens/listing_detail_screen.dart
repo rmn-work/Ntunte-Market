@@ -11,6 +11,8 @@ class ListingDetailScreen extends StatefulWidget {
   final String listingCategory;
   final String listingDescription;
   final int currentUserId;
+  final String? endTime;
+  final String? createdAt;
 
   const ListingDetailScreen({
     Key? key,
@@ -20,6 +22,8 @@ class ListingDetailScreen extends StatefulWidget {
     required this.listingCategory,
     required this.listingDescription,
     this.currentUserId = 1,
+    this.endTime,
+    this.createdAt,
   }) : super(key: key);
 
   @override
@@ -33,10 +37,11 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   final TextEditingController _bidController = TextEditingController();
 
-  List> _bidsHistory = [];
+  List _bidsHistory = [];
   bool _isLoadingBids = true;
 
   DateTime? _endTime;
+  DateTime? _createdAt;
   Timer? _timer;
   Duration _timeLeft = Duration.zero;
   bool _isExpired = false;
@@ -49,17 +54,77 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   void initState() {
     super.initState();
     _currentHighestBid = widget.price;
-    _endTime = DateTime.now().add(const Duration(hours: 24));
+
+    if (widget.endTime != null && widget.endTime!.isNotEmpty) {
+      _endTime = DateTime.tryParse(widget.endTime!)?.toLocal();
+    }
+    if (widget.createdAt != null && widget.createdAt!.isNotEmpty) {
+      _createdAt = DateTime.tryParse(widget.createdAt!)?.toLocal();
+    }
+
+    _updateRemainingTime();
     _startCountdown();
+    _fetchListingDetails();
     _fetchBidsHistory();
     _initWebSocket();
+  }
+
+  Future<void> _fetchListingDetails() async {
+    try {
+      final response = await _apiClient.dio.get('/api/listings');
+      if (!mounted || response.data == null) return;
+
+      List listingsList = [];
+      if (response.data is List) {
+        listingsList = response.data;
+      } else if (response.data is Map) {
+        final dataMap = response.data as Map;
+        if (dataMap['listings'] is List) {
+          listingsList = dataMap['listings'];
+        } else if (dataMap['data'] is List) {
+          listingsList = dataMap['data'];
+        } else if (dataMap['results'] is List) {
+          listingsList = dataMap['results'];
+        }
+      }
+
+      // Fixed: Removed the empty .cast<>() call causing the compiler error
+      final found = listingsList.firstWhere(
+        (item) => item != null && item['id'].toString() == widget.listingId.toString(),
+        orElse: () => null,
+      );
+
+      if (found != null && mounted) {
+        final rawEnd = found['end_time'] ?? found['endTime'] ?? found['date_fin'];
+        final rawCreated = found['created_at'] ?? found['createdAt'];
+        final rawHighest = found['current_highest_bid'] ?? found['starting_price'];
+
+        setState(() {
+          if (rawEnd != null && rawEnd.toString().isNotEmpty) {
+            _endTime = DateTime.tryParse(rawEnd.toString())?.toLocal();
+          }
+          if (rawCreated != null && rawCreated.toString().isNotEmpty) {
+            _createdAt = DateTime.tryParse(rawCreated.toString())?.toLocal();
+          }
+          if (rawHighest != null) {
+            final parsedHighest = double.tryParse(rawHighest.toString());
+            if (parsedHighest != null && parsedHighest > _currentHighestBid) {
+              _currentHighestBid = parsedHighest;
+            }
+          }
+        });
+        _updateRemainingTime();
+      }
+    } catch (e) {
+      print("Erreur récupération détails annonce : $e");
+    }
   }
 
   Future<void> _fetchBidsHistory() async {
     try {
       final response = await _apiClient.dio.get('/api/listings/${widget.listingId}/bids');
       if (mounted && response.data != null && response.data['bids'] != null) {
-        final List rawBids = response.data['bids'];
+        final rawBids = response.data['bids'] as List;
         setState(() {
           _bidsHistory = rawBids.map((b) => Map<String, dynamic>.from(b)).toList();
           if (_bidsHistory.isNotEmpty) {
@@ -79,22 +144,27 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     }
   }
 
+  void _updateRemainingTime() {
+    if (_endTime == null || !mounted) return;
+    final diff = _endTime!.difference(DateTime.now());
+    if (diff.isNegative || diff.inSeconds <= 0) {
+      setState(() {
+        _isExpired = true;
+        _timeLeft = Duration.zero;
+        _winnerMessage = "🎉 Enchère terminée ! Gagnant : ${_currentHighestBid.toStringAsFixed(0)} Fbu 🏆";
+      });
+      _timer?.cancel();
+    } else {
+      setState(() {
+        _isExpired = false;
+        _timeLeft = diff;
+      });
+    }
+  }
+
   void _startCountdown() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_endTime == null) return;
-      final diff = _endTime!.difference(DateTime.now());
-      if (diff.isNegative) {
-        setState(() {
-          _isExpired = true;
-          _timeLeft = Duration.zero;
-          _winnerMessage = "🎉 Enchère terminée ! Gagnant : ${_currentHighestBid.toStringAsFixed(0)} Fbu 🏆";
-        });
-        _timer?.cancel();
-      } else {
-        setState(() {
-          _timeLeft = diff;
-        });
-      }
+      _updateRemainingTime();
     });
   }
 
@@ -110,7 +180,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       _socket.emit('join_auction', widget.listingId);
     });
 
-    // Écoute des nouvelles offres en temps réel (Web & Mobile)
     _socket.on('new_bid', (data) {
       if (mounted && data != null && data['listing_id'].toString() == widget.listingId.toString()) {
         final newBidMap = Map<String, dynamic>.from(data);
@@ -148,7 +217,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       return;
     }
 
-    // Envoi de l'enchère liée au compte utilisateur connecté (sans saisie manuelle de pseudo)
     _socket.emit('place_bid', {
       'listingId': widget.listingId,
       'userId': widget.currentUserId,
@@ -180,6 +248,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final publishedText = _createdAt != null
+        ? "📦 Publié le : ${_formatBidTime(_createdAt!.toIso8601String())}"
+        : "📦 Publié récemment";
+
     return Scaffold(
       appBar: AppBar(title: Text(widget.listingTitle)),
       body: SingleChildScrollView(
@@ -189,10 +261,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           children: [
             Text(widget.listingTitle, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
-            Text("📦 Publié récemment", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            Text(publishedText, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             const SizedBox(height: 12),
 
-            // Encart Prix & Compte à rebours
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -207,20 +278,22 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   const SizedBox(height: 4),
                   Text('${_currentHighestBid.toStringAsFixed(0)} Fbu',
                       style: const TextStyle(fontSize: 26, color: Colors.teal, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  const Divider(color: Colors.teal),
-                  const SizedBox(height: 8),
-                  const Text("Temps restant :", style: TextStyle(fontSize: 12, color: Colors.black54)),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildTimeUnit(_timeLeft.inDays, "Jours"),
-                      _buildTimeUnit(_timeLeft.inHours.remainder(24), "Heures"),
-                      _buildTimeUnit(_timeLeft.inMinutes.remainder(60), "Min"),
-                      _buildTimeUnit(_timeLeft.inSeconds.remainder(60), "Sec", isRed: true),
-                    ],
-                  ),
+                  if (_endTime != null) ...[
+                    const SizedBox(height: 12),
+                    const Divider(color: Colors.teal),
+                    const SizedBox(height: 8),
+                    const Text("Temps restant :", style: TextStyle(fontSize: 12, color: Colors.black54)),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildTimeUnit(_timeLeft.inDays, "Jours"),
+                        _buildTimeUnit(_timeLeft.inHours.remainder(24), "Heures"),
+                        _buildTimeUnit(_timeLeft.inMinutes.remainder(60), "Min"),
+                        _buildTimeUnit(_timeLeft.inSeconds.remainder(60), "Sec", isRed: true),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -270,7 +343,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
             const SizedBox(height: 24),
 
-            // Historique des enchères (Pseudo, Heure, Somme)
             Text("Historique des enchères (${_bidsHistory.length})", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
             _isLoadingBids

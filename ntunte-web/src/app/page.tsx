@@ -23,6 +23,7 @@ interface Listing {
 export default function Home() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -32,6 +33,14 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
+
+  useEffect(() => {
+    // Vérifier si un utilisateur est connecté via le localStorage
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      setIsLoggedIn(!!token);
+    }
+  }, []);
 
   const fetchListings = useCallback(async () => {
     try {
@@ -65,16 +74,28 @@ export default function Home() {
     fetchListings();
   }, [fetchListings]);
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('username');
+    setIsLoggedIn(false);
+    window.location.reload();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
       const formattedEndTime = customEndTime ? new Date(customEndTime).toISOString() : null;
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
       const response = await fetch(`${apiUrl}/api/listings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           title,
           description,
@@ -93,7 +114,8 @@ export default function Home() {
         setCustomEndTime('');
         fetchListings();
       } else {
-        alert("Erreur lors de la publication.");
+        const data = await response.json();
+        alert(data.message || "Erreur lors de la publication.");
       }
     } catch (err) {
       console.error(err);
@@ -106,9 +128,32 @@ export default function Home() {
   return (
     <main className="min-h-screen p-8 bg-gray-50">
       <div className="max-w-6xl mx-auto">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Ntunte Marketplace</h1>
-          <p className="text-gray-600">Achetez, vendez et enchérissez au Burundi.</p>
+        <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Ntunte Marketplace</h1>
+            <p className="text-gray-600">Achetez, vendez et enchérissez au Burundi.</p>
+          </div>
+
+          {/* Bouton de Déconnexion ou liens d'authentification */}
+          <div className="flex items-center gap-3">
+            {isLoggedIn ? (
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition text-sm flex items-center gap-2 shadow-sm"
+              >
+                <span>🚪</span> Déconnexion
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <Link
+                  href="/login"
+                  className="px-4 py-2 bg-teal-700 text-white font-semibold rounded-lg hover:bg-teal-800 transition text-sm"
+                >
+                  Connexion
+                </Link>
+              </div>
+            )}
+          </div>
         </header>
 
         {/* Formulaire de publication */}
@@ -121,7 +166,7 @@ export default function Home() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
             />
             <textarea
               placeholder="Description"
@@ -129,7 +174,7 @@ export default function Home() {
               onChange={(e) => setDescription(e.target.value)}
               required
               rows={3}
-              className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
             />
             <input
               type="number"
@@ -137,14 +182,14 @@ export default function Home() {
               value={startingPrice}
               onChange={(e) => setStartingPrice(e.target.value)}
               required
-              className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
             />
             <input
               type="text"
               placeholder="Catégorie (ex: electronics)"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
             />
             <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-600 font-medium">Date et heure de fin de l'enchère (Optionnel) :</label>
@@ -152,7 +197,7 @@ export default function Home() {
                 type="datetime-local"
                 value={customEndTime}
                 onChange={(e) => setCustomEndTime(e.target.value)}
-                className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-sm"
+                className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 text-sm"
               />
             </div>
             <button

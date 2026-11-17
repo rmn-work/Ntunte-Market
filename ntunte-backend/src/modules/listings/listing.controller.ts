@@ -1,9 +1,11 @@
 import { Request, Response } from 'express';
 import { pool } from '../../config/database';
+import { AuthRequest } from '../middleware/auth.middleware';
 
-export const createListingController = async (req: Request, res: Response) => {
+export const createListingController = async (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, starting_price, category, sale_type, user_id, end_time } = req.body;
+    const userId = req.user?.id || req.body.user_id || 1;
+    const { title, description, starting_price, category, sale_type, end_time } = req.body;
 
     const parsedEndTime = end_time ? new Date(end_time) : null;
     const finalEndTime = parsedEndTime && !isNaN(parsedEndTime.getTime()) ? parsedEndTime.toISOString() : null;
@@ -20,7 +22,7 @@ export const createListingController = async (req: Request, res: Response) => {
       starting_price,
       category || 'general',
       sale_type || 'DIRECT',
-      user_id || 1,
+      userId,
       finalEndTime
     ];
 
@@ -66,24 +68,29 @@ export const getListingBidsController = async (req: Request, res: Response) => {
   }
 };
 
-export const placeBidController = async (req: Request, res: Response) => {
+export const placeBidController = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { amount, user_id } = req.body;
+    const { amount } = req.body;
     const numericAmount = parseFloat(amount);
-    const userId = user_id || 1;
+
+    // 1. Récupérer l'ID utilisateur sécurisé depuis le token JWT
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Connectez-vous pour enchérir.' });
+    }
 
     if (isNaN(numericAmount) || numericAmount <= 0) {
       return res.status(400).json({ success: false, message: "Montant invalide." });
     }
 
-    // 1. Récupérer le pseudo de l'utilisateur connecté/enregistré
+    // 2. Récupérer le pseudo de l'utilisateur connecté/enregistré
     const userRes = await pool.query(`SELECT username FROM users WHERE id = $1`, [userId]);
     const bidderName = userRes.rows[0]?.username || `Utilisateur #${userId}`;
 
-    // 2. Vérifier l'annonce et le prix actuel
+    // 3. Vérifier l'annonce, le propriétaire et le prix actuel
     const listingRes = await pool.query(
-      `SELECT starting_price, current_highest_bid, end_time FROM listings WHERE id = $1`,
+      `SELECT user_id, starting_price, current_highest_bid, end_time FROM listings WHERE id = $1`,
       [id]
     );
 
@@ -92,6 +99,15 @@ export const placeBidController = async (req: Request, res: Response) => {
     }
 
     const listing = listingRes.rows[0];
+
+    // Empêcher l'auto-enchère (le vendeur ne peut pas enchérir sur son propre produit)
+    if (String(listing.user_id) === String(userId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Vous ne pouvez pas enchérir sur votre propre annonce.',
+      });
+    }
+
     const currentMax = parseFloat(listing.current_highest_bid ?? listing.starting_price ?? 0);
 
     if (listing.end_time && new Date(listing.end_time).getTime() < Date.now()) {
@@ -105,7 +121,7 @@ export const placeBidController = async (req: Request, res: Response) => {
       });
     }
 
-    // 3. Insérer l'enchère avec le pseudo unique de l'utilisateur
+    // 4. Insérer l'enchère avec le pseudo unique de l'utilisateur
     const insertBidRes = await pool.query(
       `INSERT INTO bids (listing_id, user_id, amount, bidder_name, created_at)
        VALUES ($1, $2, $3, $4, NOW())
@@ -113,7 +129,7 @@ export const placeBidController = async (req: Request, res: Response) => {
       [id, userId, numericAmount, bidderName]
     );
 
-    // 4. Mettre à jour l'offre la plus haute
+    // 5. Mettre à jour l'offre la plus haute
     await pool.query(
       `UPDATE listings SET current_highest_bid = $1 WHERE id = $2`,
       [numericAmount, id]
@@ -121,7 +137,7 @@ export const placeBidController = async (req: Request, res: Response) => {
 
     const savedBid = insertBidRes.rows[0];
 
-    // 5. Diffuser en temps réel (Web & Mobile)
+    // 6. Diffuser en temps réel (Web & Mobile)
     const io = req.app.get('io');
     if (io) {
       io.emit('new_bid', savedBid);
