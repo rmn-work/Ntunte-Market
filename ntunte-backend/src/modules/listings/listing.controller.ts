@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { pool } from '../../config/database';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { AuthRequest } from '../../middlewares/auth.middleware';
 
 export const createListingController = async (req: AuthRequest, res: Response) => {
   try {
@@ -74,7 +74,6 @@ export const placeBidController = async (req: AuthRequest, res: Response) => {
     const { amount } = req.body;
     const numericAmount = parseFloat(amount);
 
-    // 1. Récupérer l'ID utilisateur sécurisé depuis le token JWT
     const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Connectez-vous pour enchérir.' });
@@ -84,11 +83,9 @@ export const placeBidController = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ success: false, message: "Montant invalide." });
     }
 
-    // 2. Récupérer le pseudo de l'utilisateur connecté/enregistré
     const userRes = await pool.query(`SELECT username FROM users WHERE id = $1`, [userId]);
     const bidderName = userRes.rows[0]?.username || `Utilisateur #${userId}`;
 
-    // 3. Vérifier l'annonce, le propriétaire et le prix actuel
     const listingRes = await pool.query(
       `SELECT user_id, starting_price, current_highest_bid, end_time FROM listings WHERE id = $1`,
       [id]
@@ -100,7 +97,6 @@ export const placeBidController = async (req: AuthRequest, res: Response) => {
 
     const listing = listingRes.rows[0];
 
-    // Empêcher l'auto-enchère (le vendeur ne peut pas enchérir sur son propre produit)
     if (String(listing.user_id) === String(userId)) {
       return res.status(403).json({
         success: false,
@@ -121,7 +117,6 @@ export const placeBidController = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // 4. Insérer l'enchère avec le pseudo unique de l'utilisateur
     const insertBidRes = await pool.query(
       `INSERT INTO bids (listing_id, user_id, amount, bidder_name, created_at)
        VALUES ($1, $2, $3, $4, NOW())
@@ -129,7 +124,6 @@ export const placeBidController = async (req: AuthRequest, res: Response) => {
       [id, userId, numericAmount, bidderName]
     );
 
-    // 5. Mettre à jour l'offre la plus haute
     await pool.query(
       `UPDATE listings SET current_highest_bid = $1 WHERE id = $2`,
       [numericAmount, id]
@@ -137,7 +131,6 @@ export const placeBidController = async (req: AuthRequest, res: Response) => {
 
     const savedBid = insertBidRes.rows[0];
 
-    // 6. Diffuser en temps réel (Web & Mobile)
     const io = req.app.get('io');
     if (io) {
       io.emit('new_bid', savedBid);

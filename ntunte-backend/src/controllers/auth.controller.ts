@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/database';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { AuthRequest } from '../middlewares/auth.middleware';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ntunte_dev_secret_key_2026';
 
@@ -35,7 +35,6 @@ export const registerController = async (req: Request, res: Response) => {
       });
     }
 
-    // Vérifier si le pseudo ou l'e-mail existe déjà
     const existing = await pool.query(
       `SELECT username, email FROM users WHERE LOWER(username) = LOWER($1) OR LOWER(email) = $2`,
       [cleanUsername, cleanEmail]

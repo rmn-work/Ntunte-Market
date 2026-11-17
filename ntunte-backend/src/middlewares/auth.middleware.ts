@@ -13,17 +13,17 @@ export interface AuthRequest extends Request {
 
 export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
 
   if (!token) {
-    return res.status(401).json({ success: false, message: 'Connexion requise (Token manquant).' });
+    return res.status(401).json({ success: false, message: 'Token d’authentification manquant.' });
   }
 
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: number; username: string; email: string };
-    req.user = decoded;
+  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+    if (err) {
+      return res.status(403).json({ success: false, message: 'Token invalide ou expiré.' });
+    }
+    req.user = user;
     next();
-  } catch (err) {
-    return res.status(403).json({ success: false, message: 'Session expirée ou invalide.' });
-  }
+  });
 };
