@@ -21,13 +21,17 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [isExpired, setIsExpired] = useState(false);
 
+  // État pour le diagnostic en direct
+  const [debugInfo, setDebugInfo] = useState<string>('Chargement en cours...');
+
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
 
   const fetchData = async () => {
+    const targetBidsUrl = `${apiUrl}/api/listings/${id}/bids`;
     try {
       const [listingRes, bidsRes] = await Promise.all([
         fetch(`${apiUrl}/api/listings`),
-        fetch(`${apiUrl}/api/listings/${id}/bids`)
+        fetch(targetBidsUrl)
       ]);
 
       const listingJson = await listingRes.json();
@@ -35,14 +39,17 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       const found = list.find((item: any) => String(item.id) === String(id));
       setListing(found || null);
 
+      const rawBidsText = await bidsRes.text();
+      setDebugInfo(`URL: ${targetBidsUrl} | Statut HTTP: ${bidsRes.status} | Réponse brute: ${rawBidsText}`);
+
       if (bidsRes.ok) {
-        const bidsJson = await bidsRes.json();
-        // S'adapte que l'API renvoie { bids: [...] } ou directement un tableau [...]
+        const bidsJson = JSON.parse(rawBidsText);
         const extractedBids = Array.isArray(bidsJson) ? bidsJson : (bidsJson.bids || bidsJson.data || []);
         setBids(extractedBids);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erreur chargement :', err);
+      setDebugInfo(`URL: ${targetBidsUrl} | ERREUR RÉSEAU/JS: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -97,7 +104,6 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
     }
 
     try {
-      // Récupération de l'ID utilisateur stocké (ou ID 1 par défaut)
       const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') || 1 : 1;
 
       const res = await fetch(`${apiUrl}/api/listings/${id}/bid`, {
@@ -167,7 +173,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
           )}
         </div>
 
-        {/* Formulaire pour enchérir épuré (sans champ pseudo) */}
+        {/* Formulaire pour enchérir */}
         {!isExpired && (
           <form onSubmit={handlePlaceBid} className="mt-6 flex flex-col sm:flex-row gap-3">
             <input
@@ -193,6 +199,11 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
           <h2 className="text-lg font-bold text-gray-900 mb-3">
             Historique des enchères ({bids.length})
           </h2>
+
+          {/* Encart temporaire de diagnostic */}
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded text-xs font-mono text-gray-800 break-all">
+            <strong>🔍 Diagnostic API :</strong> {debugInfo}
+          </div>
 
           {bids.length === 0 ? (
             <p className="text-sm text-gray-500 bg-gray-50 p-4 rounded-lg">

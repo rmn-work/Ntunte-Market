@@ -177,20 +177,20 @@ export default function Home() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {listings.map((listing: Listing, index) => {
-              const itemTitle = listing.title || listing.titre || 'Annonce sans titre';
-              const itemDescription = listing.description || 'Aucune description disponible.';
+            {listings.map((item: Listing, index) => {
+              const itemTitle = item.title || item.titre || 'Annonce sans titre';
+              const itemDescription = item.description || 'Aucune description disponible.';
               const rawPrice =
-                listing.current_highest_bid ??
-                listing.price ??
-                listing.prix ??
-                listing.starting_price ??
-                listing.amount ??
+                item.current_highest_bid ??
+                item.price ??
+                item.prix ??
+                item.starting_price ??
+                item.amount ??
                 0;
               const numericPrice = typeof rawPrice === 'number' ? rawPrice : parseFloat(rawPrice) || 0;
-              const createdAtFormatted = listing.created_at ? new Date(listing.created_at).toLocaleString() : 'Récemment';
+              const createdAtFormatted = item.created_at ? new Date(item.created_at).toLocaleString() : 'Récemment';
 
-              const rawEndTime = listing.end_time || listing.endTime || listing.date_fin;
+              const rawEndTime = item.end_time || item.endTime || item.date_fin;
               let timeLeftText = 'Aucune fin définie';
               let isExpired = false;
 
@@ -217,35 +217,33 @@ export default function Home() {
 
               return (
                 <div
-                  key={listing.id || index}
-                  className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between"
+                  key={item.id || index}
+                  className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex justify-between items-start gap-2 mb-2">
-                      <h3 className="font-bold text-lg text-gray-900">{itemTitle}</h3>
+                      <h3 className="text-lg font-bold text-gray-900">{itemTitle}</h3>
                       <span className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${isExpired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
                         {isExpired ? 'Terminée' : 'Enchère active'}
                       </span>
                     </div>
-                    <p className="text-gray-600 text-sm mb-4 line-clamp-3">{itemDescription}</p>
+                    <p className="text-gray-600 text-sm mt-1 line-clamp-3">{itemDescription}</p>
 
-                    <div className="text-xs text-gray-500 space-y-1 mb-4 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                    <div className="text-xs text-gray-500 space-y-1 mt-3 mb-3 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                       <p>📦 Publié : {createdAtFormatted}</p>
                       <p>⏳ Temps restant : <span className="font-semibold text-gray-800">{timeLeftText}</span></p>
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-gray-100">
-                    <p className="text-xs text-gray-500">Offre actuelle</p>
-                    <p className="font-bold text-gray-900 text-lg mb-3">
-                      {numericPrice.toLocaleString()} Fbu
+                  <div className="pt-2 border-t border-gray-100">
+                    <p className="text-teal-700 font-bold mt-2">
+                      Offre actuelle : {numericPrice.toLocaleString()} Fbu
                     </p>
-
                     <Link
-                      href={`/listings/${listing.id}`}
-                      className="block w-full text-center py-2.5 px-4 bg-teal-700 text-white font-semibold rounded-lg hover:bg-teal-800 transition"
+                      href={`/listings/${item.id}`}
+                      className="inline-block w-full text-center mt-3 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 transition"
                     >
-                      {isExpired ? 'Voir les résultats' : 'Enchérir en direct'}
+                      Participer à l'enchère et voir l'historique →
                     </Link>
                   </div>
                 </div>

@@ -48,7 +48,7 @@ export const getListingBidsController = async (req: Request, res: Response) => {
         b.user_id,
         b.amount,
         b.created_at,
-        COALESCE(NULLIF(b.bidder_name, ''), u.username, u.name, CONCAT('Enchérisseur #', b.user_id)) AS bidder_name
+        COALESCE(NULLIF(b.bidder_name, ''), u.username, CONCAT('Enchérisseur #', b.user_id)) AS bidder_name
       FROM bids b
       LEFT JOIN users u ON b.user_id = u.id
       WHERE b.listing_id = $1
