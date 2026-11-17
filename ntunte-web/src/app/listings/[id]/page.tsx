@@ -37,7 +37,9 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
 
       if (bidsRes.ok) {
         const bidsJson = await bidsRes.json();
-        setBids(bidsJson.bids || []);
+        // S'adapte que l'API renvoie { bids: [...] } ou directement un tableau [...]
+        const extractedBids = Array.isArray(bidsJson) ? bidsJson : (bidsJson.bids || bidsJson.data || []);
+        setBids(extractedBids);
       }
     } catch (err) {
       console.error('Erreur chargement :', err);
