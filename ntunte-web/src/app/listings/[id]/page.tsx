@@ -17,7 +17,6 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
   const [listing, setListing] = useState<any>(null);
   const [bids, setBids] = useState<Bid[]>([]);
   const [bidAmount, setBidAmount] = useState('');
-  const [bidderNameInput, setBidderNameInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [isExpired, setIsExpired] = useState(false);
@@ -50,7 +49,6 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
   useEffect(() => {
     fetchData();
 
-    // Connexion Socket.io pour la mise à jour en direct sans rafraîchir la page
     const socket = io(apiUrl);
     socket.on('new_bid', (newBid: any) => {
       if (String(newBid.listing_id) === String(id)) {
@@ -97,21 +95,24 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
     }
 
     try {
+      // Récupération de l'ID utilisateur stocké (ou ID 1 par défaut)
+      const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') || 1 : 1;
+
       const res = await fetch(`${apiUrl}/api/listings/${id}/bid`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: numericBid,
-          user_id: 1,
-          bidder_name: bidderNameInput.trim() || undefined
+          user_id: Number(currentUserId),
         }),
       });
 
+      const data = await res.json();
       if (res.ok) {
         setBidAmount('');
         fetchData();
       } else {
-        alert("Erreur lors de l'enregistrement de l'enchère.");
+        alert(data.message || "Erreur lors de l'enregistrement de l'enchère.");
       }
     } catch (err) {
       console.error(err);
@@ -164,16 +165,9 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
           )}
         </div>
 
-        {/* Formulaire pour enchérir */}
+        {/* Formulaire pour enchérir épuré (sans champ pseudo) */}
         {!isExpired && (
           <form onSubmit={handlePlaceBid} className="mt-6 flex flex-col sm:flex-row gap-3">
-            <input
-              type="text"
-              placeholder="Votre pseudo (ex: Jean_Bujumbura)"
-              value={bidderNameInput}
-              onChange={(e) => setBidderNameInput(e.target.value)}
-              className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 sm:w-56"
-            />
             <input
               type="number"
               placeholder={`Offre > ${currentPrice} Fbu`}

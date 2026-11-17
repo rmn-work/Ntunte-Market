@@ -69,7 +69,7 @@ export const getListingBidsController = async (req: Request, res: Response) => {
 export const placeBidController = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { amount, user_id, bidder_name } = req.body;
+    const { amount, user_id } = req.body;
     const numericAmount = parseFloat(amount);
     const userId = user_id || 1;
 
@@ -77,7 +77,11 @@ export const placeBidController = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: "Montant invalide." });
     }
 
-    // 1. Vérifier le prix actuel et l'expiration de l'annonce
+    // 1. Récupérer le pseudo de l'utilisateur connecté/enregistré
+    const userRes = await pool.query(`SELECT username FROM users WHERE id = $1`, [userId]);
+    const bidderName = userRes.rows[0]?.username || `Utilisateur #${userId}`;
+
+    // 2. Vérifier l'annonce et le prix actuel
     const listingRes = await pool.query(
       `SELECT starting_price, current_highest_bid, end_time FROM listings WHERE id = $1`,
       [id]
@@ -101,25 +105,15 @@ export const placeBidController = async (req: Request, res: Response) => {
       });
     }
 
-    // 2. Déterminer le pseudo à enregistrer
-    let resolvedBidderName = bidder_name?.trim();
-    if (!resolvedBidderName) {
-      const userRes = await pool.query(
-        `SELECT COALESCE(username, name, CONCAT('Enchérisseur #', id)) AS display_name FROM users WHERE id = $1`,
-        [userId]
-      );
-      resolvedBidderName = userRes.rows[0]?.display_name || `Enchérisseur #${userId}`;
-    }
-
-    // 3. Insérer l'enchère dans la table `bids`
+    // 3. Insérer l'enchère avec le pseudo unique de l'utilisateur
     const insertBidRes = await pool.query(
       `INSERT INTO bids (listing_id, user_id, amount, bidder_name, created_at)
        VALUES ($1, $2, $3, $4, NOW())
        RETURNING id, listing_id, user_id, amount, bidder_name, created_at`,
-      [id, userId, numericAmount, resolvedBidderName]
+      [id, userId, numericAmount, bidderName]
     );
 
-    // 4. Mettre à jour l'offre la plus haute sur l'annonce
+    // 4. Mettre à jour l'offre la plus haute
     await pool.query(
       `UPDATE listings SET current_highest_bid = $1 WHERE id = $2`,
       [numericAmount, id]
@@ -127,7 +121,7 @@ export const placeBidController = async (req: Request, res: Response) => {
 
     const savedBid = insertBidRes.rows[0];
 
-    // 5. Diffuser en temps réel à tous les clients (Web & Mobile)
+    // 5. Diffuser en temps réel (Web & Mobile)
     const io = req.app.get('io');
     if (io) {
       io.emit('new_bid', savedBid);
@@ -139,7 +133,7 @@ export const placeBidController = async (req: Request, res: Response) => {
       bid: savedBid
     });
   } catch (error: any) {
-    console.error("Erreur lors du placement de l'enchère:", error);
+    console.error("Erreur placement enchère:", error);
     return res.status(500).json({ success: false, error: error.message });
   }
 };

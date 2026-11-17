@@ -32,7 +32,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   late double _currentHighestBid;
 
   final TextEditingController _bidController = TextEditingController();
-  final TextEditingController _bidderNameController = TextEditingController();
 
   List> _bidsHistory = [];
   bool _isLoadingBids = true;
@@ -149,13 +148,11 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       return;
     }
 
-    final String customName = _bidderNameController.text.trim();
-
+    // Envoi de l'enchère liée au compte utilisateur connecté (sans saisie manuelle de pseudo)
     _socket.emit('place_bid', {
       'listingId': widget.listingId,
       'userId': widget.currentUserId,
       'amount': bidAmount,
-      if (customName.isNotEmpty) 'bidder_name': customName,
     });
 
     _bidController.clear();
@@ -178,7 +175,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     _socket.disconnect();
     _socket.dispose();
     _bidController.dispose();
-    _bidderNameController.dispose();
     super.dispose();
   }
 
@@ -254,15 +250,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               if (_successMessage != null)
                 Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_successMessage!, style: const TextStyle(color: Colors.green))),
 
-              TextField(
-                controller: _bidderNameController,
-                decoration: const InputDecoration(
-                  labelText: "Votre pseudo (ex: Jean_Bujumbura)",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-              ),
-              const SizedBox(height: 10),
               TextField(
                 controller: _bidController,
                 keyboardType: TextInputType.number,
