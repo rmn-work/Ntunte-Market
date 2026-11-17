@@ -11,6 +11,7 @@ class Listing {
   final double? distanceKm;
   final String status;
   final DateTime createdAt;
+  final String? endTime;
 
   Listing({
     required this.id,
@@ -25,26 +26,26 @@ class Listing {
     this.distanceKm,
     required this.status,
     required this.createdAt,
+    this.endTime,
   });
 
   factory Listing.fromJson(Map<String, dynamic> json) {
     return Listing(
       id: json['id'],
-      userId: json['user_id'],
-      title: json['title'],
-      description: json['description'],
-      category: json['category'],
-      saleType: json['sale_type'],
-      startingPrice: double.parse(json['starting_price'].toString()),
+      userId: json['user_id'] ?? 1,
+      title: json['title'] ?? json['titre'] ?? '',
+      description: json['description'] ?? '',
+      category: json['category'] ?? json['categorie'] ?? 'general',
+      saleType: json['sale_type'] ?? 'AUCTION',
+      startingPrice: double.parse((json['starting_price'] ?? json['price'] ?? 0).toString()),
       currentHighestBid: json['current_highest_bid'] != null
           ? double.parse(json['current_highest_bid'].toString())
           : null,
-      carbonSavedKg: double.parse(json['carbon_saved_kg'].toString()),
-      distanceKm: json['distance_km'] != null
-          ? double.parse(json['distance_km'].toString())
-          : null,
-      status: json['status'],
-      createdAt: DateTime.parse(json['created_at']),
+      carbonSavedKg: json['carbon_saved_kg'] != null ? double.parse(json['carbon_saved_kg'].toString()) : 10.0,
+      distanceKm: json['distance_km'] != null ? double.parse(json['distance_km'].toString()) : null,
+      status: json['status'] ?? 'ACTIVE',
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
+      endTime: json['end_time'] ?? json['endTime'] ?? json['date_fin'],
     );
   }
 }

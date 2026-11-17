@@ -110,9 +110,12 @@ class _NearbyListingsScreenState extends State<NearbyListingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Ntunte Market"),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0.5,
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle_outline, size: 28),
+            icon: const Icon(Icons.add_circle_outline, size: 28, color: Colors.teal),
             onPressed: () {
               Navigator.push(
                 context,
@@ -222,14 +225,14 @@ class _NearbyListingsScreenState extends State<NearbyListingsScreen> {
                                 ),
                               ),
                               subtitle: Text(
-                                description,
+                                description.isNotEmpty ? description : 'Aucune description disponible.',
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               trailing: Text(
-                                "${parsedPrice.toStringAsFixed(2)} Fbu",
+                                "${parsedPrice.toStringAsFixed(0)} Fbu",
                                 style: const TextStyle(
-                                  color: Colors.black87,
+                                  color: Colors.teal,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),

@@ -106,23 +106,6 @@ export default function Home() {
   return (
     <main className="min-h-screen p-8 bg-gray-50">
       <div className="max-w-6xl mx-auto">
-
-        {/* BLOC DE DIAGNOSTIC TEMPORAIRE */}
-        <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-400 rounded-xl text-xs font-mono text-amber-950 overflow-x-auto">
-          <p className="font-bold text-sm mb-1">🔍 DIAGNOSTIC API & DONNÉES :</p>
-          <p><strong>URL API utilisée :</strong> {apiUrl}/api/listings</p>
-          <p><strong>Nombre d'annonces reçues :</strong> {listings.length}</p>
-          {listings.length > 0 && (
-            <div className="mt-2">
-              <p><strong>Clés du 1er objet :</strong> {Object.keys(listings[0]).join(', ')}</p>
-              <p><strong>Valeur brute de end_time :</strong> {JSON.stringify(listings[0].end_time ?? 'ABSENT')}</p>
-              <pre className="mt-1 p-2 bg-white rounded border border-amber-200">
-                {JSON.stringify(listings[0], null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Ntunte Marketplace</h1>
           <p className="text-gray-600">Achetez, vendez et enchérissez au Burundi.</p>

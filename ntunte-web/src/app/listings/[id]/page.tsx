@@ -1,219 +1,233 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { io } from 'socket.io-client';
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
-const socket = io(apiUrl);
+interface Bid {
+  id: number | string;
+  bidder_name: string;
+  amount: number | string;
+  created_at: string;
+}
 
 export default function ListingDetailPage({ params }: { params: { id: string } }) {
-  const [title, setTitle] = useState<string>(`Article #${params.id}`);
-  const [description, setDescription] = useState<string>('');
-  const [currentBid, setCurrentBid] = useState<number>(0);
-  const [createdAt, setCreatedAt] = useState<string | null>(null);
-  const [endTime, setEndTime] = useState<string | null>(null);
+  const id = params.id;
 
-  const [customEndTime, setCustomEndTime] = useState<string>('');
-  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
+  const [listing, setListing] = useState<any>(null);
+  const [bids, setBids] = useState<Bid[]>([]);
+  const [bidAmount, setBidAmount] = useState('');
+  const [bidderNameInput, setBidderNameInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [isExpired, setIsExpired] = useState(false);
 
-  const [bidAmount, setBidAmount] = useState<string>('');
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [winnerMessage, setWinnerMessage] = useState<string | null>(null);
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
+
+  const fetchData = async () => {
+    try {
+      const [listingRes, bidsRes] = await Promise.all([
+        fetch(`${apiUrl}/api/listings`),
+        fetch(`${apiUrl}/api/listings/${id}/bids`)
+      ]);
+
+      const listingJson = await listingRes.json();
+      const list = Array.isArray(listingJson) ? listingJson : listingJson.listings || listingJson.data || [];
+      const found = list.find((item: any) => String(item.id) === String(id));
+      setListing(found || null);
+
+      if (bidsRes.ok) {
+        const bidsJson = await bidsRes.json();
+        setBids(bidsJson.bids || []);
+      }
+    } catch (err) {
+      console.error('Erreur chargement :', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchListingDetail = async () => {
-      try {
-        const res = await fetch(`${apiUrl}/api/listings`);
-        const json = await res.json();
-        const list = Array.isArray(json) ? json : json.listings || json.data || [];
-        const found = list.find((item: any) => item.id?.toString() === params.id?.toString());
+    fetchData();
 
-        if (found) {
-          setTitle(found.title || found.titre || `Article #${params.id}`);
-          setDescription(found.description || '');
-          const initial = found.current_highest_bid ?? found.starting_price ?? found.price ?? 0;
-          setCurrentBid(parseFloat(initial) || 0);
-          setCreatedAt(found.created_at || new Date().toISOString());
-          if (found.end_time) setEndTime(found.end_time);
-        }
-      } catch (err) {
-        console.error('Erreur récupération détails annonce :', err);
+    // Connexion Socket.io pour la mise à jour en direct sans rafraîchir la page
+    const socket = io(apiUrl);
+    socket.on('new_bid', (newBid: any) => {
+      if (String(newBid.listing_id) === String(id)) {
+        setBids((prev) => [newBid, ...prev]);
+        setListing((prev: any) => prev ? { ...prev, current_highest_bid: newBid.amount } : prev);
       }
-    };
-
-    fetchListingDetail();
-  }, [params.id]);
-
-  useEffect(() => {
-    if (!endTime) return;
-
-    const interval = setInterval(() => {
-      const totalSeconds = Math.floor((new Date(endTime).getTime() - Date.now()) / 1000);
-
-      if (totalSeconds <= 0) {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-        setWinnerMessage(`🎉 Enchère terminée ! Félicitations au vainqueur avec une offre de ${currentBid.toLocaleString()} Fbu ! 🏆`);
-        clearInterval(interval);
-      } else {
-        const days = Math.floor(totalSeconds / (3600 * 24));
-        const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-        setTimeLeft({ days, hours, minutes, seconds });
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [endTime, currentBid]);
-
-  useEffect(() => {
-    socket.emit('join_auction', params.id);
-
-    socket.on('new_bid_broadcast', (data) => {
-      if (data.listingId?.toString() === params.id?.toString()) {
-        setCurrentBid(parseFloat(data.current_highest_bid));
-        setErrorMsg(null);
-        setSuccessMsg('Votre enchère a été enregistrée en direct !');
-      }
-    });
-
-    socket.on('bid_error', (data) => {
-      setErrorMsg(data.message);
-      setSuccessMsg(null);
     });
 
     return () => {
-      socket.off('new_bid_broadcast');
-      socket.off('bid_error');
+      socket.disconnect();
     };
-  }, [params.id]);
+  }, [id, apiUrl]);
 
-  const handleSetEndTime = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (customEndTime) {
-      setEndTime(customEndTime);
-      alert('Fin de l’enchère configurée avec succès !');
-    }
-  };
+  useEffect(() => {
+    if (!listing?.end_time) return;
+    const updateTimer = () => {
+      const diff = new Date(listing.end_time).getTime() - Date.now();
+      if (diff <= 0) {
+        setIsExpired(true);
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+      } else {
+        setIsExpired(false);
+        setTimeLeft({
+          days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+          minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+          seconds: Math.floor((diff % (1000 * 60)) / 1000),
+        });
+      }
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [listing?.end_time]);
 
-  const handlePlaceBid = (e: React.FormEvent) => {
+  const handlePlaceBid = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (endTime && new Date(endTime).getTime() < Date.now()) {
-      setErrorMsg("Cette enchère est terminée.");
+    const currentPrice = Number(listing?.current_highest_bid || listing?.starting_price || 0);
+    const numericBid = parseFloat(bidAmount);
+
+    if (isNaN(numericBid) || numericBid <= currentPrice) {
+      alert(`Votre offre doit être supérieure à ${currentPrice.toLocaleString()} Fbu.`);
       return;
     }
 
-    setErrorMsg(null);
-    setSuccessMsg(null);
+    try {
+      const res = await fetch(`${apiUrl}/api/listings/${id}/bid`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: numericBid,
+          user_id: 1,
+          bidder_name: bidderNameInput.trim() || undefined
+        }),
+      });
 
-    const parsedAmount = parseFloat(bidAmount);
-    if (isNaN(parsedAmount) || parsedAmount <= currentBid) {
-      setErrorMsg(`Votre offre doit être supérieure à ${currentBid.toLocaleString()} Fbu.`);
-      return;
+      if (res.ok) {
+        setBidAmount('');
+        fetchData();
+      } else {
+        alert("Erreur lors de l'enregistrement de l'enchère.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erreur de connexion au serveur.');
     }
-
-    socket.emit('place_bid', {
-      listingId: parseInt(params.id),
-      userId: 2,
-      amount: parsedAmount,
-    });
-    setBidAmount('');
   };
 
-  const isExpired = endTime ? new Date(endTime).getTime() < Date.now() : false;
+  if (loading) return <div className="p-8 text-gray-600">Chargement de l'annonce...</div>;
+  if (!listing) return <div className="p-8 text-red-600">Annonce introuvable.</div>;
+
+  const currentPrice = Number(listing.current_highest_bid || listing.starting_price || 0);
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-3xl mx-auto">
-        <Link href="/" className="text-teal-700 hover:underline font-medium inline-block mb-6">
+    <main className="min-h-screen p-8 bg-gray-50">
+      <div className="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <Link href="/" className="text-sm text-teal-700 hover:underline font-medium">
           ← Retour aux annonces
         </Link>
 
-        <div className="bg-white shadow-sm border border-gray-200 rounded-xl p-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{title}</h1>
-          {description && <p className="text-gray-600 mb-4">{description}</p>}
+        <h1 className="text-3xl font-bold text-gray-900 mt-4">{listing.title}</h1>
+        <p className="text-gray-600 mt-2">{listing.description}</p>
+        <p className="text-xs text-gray-500 mt-4">
+          📦 Publié le : {new Date(listing.created_at).toLocaleString()}
+        </p>
 
-          {createdAt && (
-            <p className="text-xs text-gray-500 mb-4">
-              📦 Publié le : {new Date(createdAt).toLocaleString()}
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <p className="text-sm text-gray-600">Enchère actuelle la plus haute :</p>
+          <p className="text-2xl font-bold text-teal-700 mt-1">
+            {currentPrice.toLocaleString()} Fbu
+          </p>
+
+          {listing.end_time && !isExpired && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {[
+                { label: 'Jours', val: timeLeft.days },
+                { label: 'Heures', val: timeLeft.hours },
+                { label: 'Minutes', val: timeLeft.minutes },
+                { label: 'Secondes', val: timeLeft.seconds }
+              ].map((item) => (
+                <div key={item.label} className="bg-white px-3 py-2 rounded-lg border border-gray-200 text-center min-w-[70px]">
+                  <span className="block text-lg font-bold text-gray-900">{item.val}</span>
+                  <span className="text-xs text-gray-500">{item.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {isExpired && (
+            <p className="mt-4 text-sm font-semibold text-red-600">Cette enchère est terminée.</p>
+          )}
+        </div>
+
+        {/* Formulaire pour enchérir */}
+        {!isExpired && (
+          <form onSubmit={handlePlaceBid} className="mt-6 flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              placeholder="Votre pseudo (ex: Jean_Bujumbura)"
+              value={bidderNameInput}
+              onChange={(e) => setBidderNameInput(e.target.value)}
+              className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 sm:w-56"
+            />
+            <input
+              type="number"
+              placeholder={`Offre > ${currentPrice} Fbu`}
+              value={bidAmount}
+              onChange={(e) => setBidAmount(e.target.value)}
+              required
+              min={currentPrice + 1}
+              className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+            />
+            <button
+              type="submit"
+              className="py-3 px-6 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
+            >
+              Placer l'enchère
+            </button>
+          </form>
+        )}
+
+        {/* Historique public des enchères */}
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <h2 className="text-lg font-bold text-gray-900 mb-3">
+            Historique des enchères ({bids.length})
+          </h2>
+
+          {bids.length === 0 ? (
+            <p className="text-sm text-gray-500 bg-gray-50 p-4 rounded-lg">
+              Aucune enchère placée pour le moment. Soyez le premier à enchérir !
             </p>
-          )}
-
-          <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-teal-800">Enchère actuelle la plus haute :</p>
-            <p className="text-3xl font-bold text-teal-700 mb-3">{currentBid.toLocaleString()} Fbu</p>
-
-            {timeLeft ? (
-              <div className="bg-white p-3 rounded-md border border-teal-100 flex justify-around text-center">
-                <div>
-                  <span className="block text-xl font-bold text-teal-900">{timeLeft.days}</span>
-                  <span className="text-xs text-gray-500">Jours</span>
-                </div>
-                <div>
-                  <span className="block text-xl font-bold text-teal-900">{timeLeft.hours}</span>
-                  <span className="text-xs text-gray-500">Heures</span>
-                </div>
-                <div>
-                  <span className="block text-xl font-bold text-teal-900">{timeLeft.minutes}</span>
-                  <span className="text-xs text-gray-500">Minutes</span>
-                </div>
-                <div>
-                  <span className="block text-xl font-bold text-red-600 animate-pulse">{timeLeft.seconds}</span>
-                  <span className="text-xs text-gray-500">Secondes</span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-600 italic">Aucune date de fin définie.</p>
-            )}
-          </div>
-
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
-            <form onSubmit={handleSetEndTime} className="flex flex-col sm:flex-row gap-3 items-center">
-              <label className="text-sm font-medium text-gray-700">Définir la fin :</label>
-              <input
-                type="datetime-local"
-                value={customEndTime}
-                onChange={(e) => setCustomEndTime(e.target.value)}
-                className="border border-gray-300 p-2 rounded-lg text-sm flex-1"
-                required
-              />
-              <button type="submit" className="bg-gray-800 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-black">
-                Valider
-              </button>
-            </form>
-          </div>
-
-          {winnerMessage && (
-            <div className="bg-gradient-to-r from-yellow-400 via-green-400 to-teal-500 text-white p-4 rounded-xl mb-6 text-center font-bold text-lg shadow-lg animate-bounce">
-              {winnerMessage}
-            </div>
-          )}
-
-          {isExpired ? (
-            <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg mb-4 font-semibold text-center">
-              ⛔ Cette enchère est définitivement clôturée.
-            </div>
           ) : (
-            <>
-              {errorMsg && <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4 text-sm font-medium">{errorMsg}</div>}
-              {successMsg && <div className="bg-green-50 text-green-700 p-3 rounded-lg mb-4 text-sm font-medium">{successMsg}</div>}
-
-              <form onSubmit={handlePlaceBid} className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="number"
-                  value={bidAmount}
-                  onChange={(e) => setBidAmount(e.target.value)}
-                  placeholder={`Offre > ${currentBid} Fbu`}
-                  className="border border-gray-300 p-3 rounded-lg flex-1"
-                  required
-                />
-                <button type="submit" className="bg-teal-700 text-white font-semibold px-6 py-3 rounded-lg hover:bg-teal-800">
-                  Placer l'enchère
-                </button>
-              </form>
-            </>
+            <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
+              {bids.map((bid, idx) => (
+                <div
+                  key={bid.id || idx}
+                  className={`p-3.5 flex items-center justify-between ${idx === 0 ? 'bg-teal-50/60' : 'bg-white'}`}
+                >
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900 flex items-center gap-2">
+                      <span>👤 {bid.bidder_name}</span>
+                      {idx === 0 && (
+                        <span className="text-[11px] bg-teal-700 text-white px-2 py-0.5 rounded-full">
+                          Meilleure offre
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      🕒 {new Date(bid.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <p className="font-bold text-gray-900 text-base">
+                    {Number(bid.amount).toLocaleString()} Fbu
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>

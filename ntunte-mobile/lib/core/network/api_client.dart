@@ -3,7 +3,7 @@ import 'package:dio/dio.dart';
 class ApiClient {
   late final Dio dio;
 
-  // URL de production sur Render[cite: 1, 2]
+  // URL de production sur Render
   static const String baseUrl = "https://ntunte-backend.onrender.com";
 
   ApiClient() {
@@ -30,5 +30,14 @@ class ApiClient {
         },
       ),
     );
+  }
+
+  // Récupérer l'historique des enchères d'un produit
+  Future<List<dynamic>> getListingBids(int listingId) async {
+    final response = await dio.get('/api/listings/$listingId/bids');
+    if (response.data != null && response.data['bids'] != null) {
+      return List<dynamic>.from(response.data['bids']);
+    }
+    return [];
   }
 }
