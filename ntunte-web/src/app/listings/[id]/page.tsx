@@ -98,12 +98,27 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       return;
     }
 
-    try {
-      const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') || 1 : 1;
+    // Recherche élargie du token dans le localStorage
+    const token = typeof window !== 'undefined'
+      ? localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('jwt')
+      : null;
 
+    const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') || 1 : 1;
+
+    console.log("Token détecté :", token); // Visible dans la console F12
+
+    if (!token) {
+      alert("Aucun jeton de connexion trouvé. Veuillez vous reconnecter.");
+      return;
+    }
+
+    try {
       const res = await fetch(`${apiUrl}/api/listings/${id}/bid`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           amount: numericBid,
           user_id: Number(currentUserId),
@@ -114,8 +129,9 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       if (res.ok) {
         setBidAmount('');
         fetchData();
+        alert("Enchère placée avec succès !");
       } else {
-        alert(data.message || "Erreur lors de l'enregistrement de l'enchère.");
+        alert(data.message || data.error || "Erreur lors de l'enregistrement de l'enchère.");
       }
     } catch (err) {
       console.error(err);
