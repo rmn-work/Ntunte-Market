@@ -44,25 +44,46 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
+    console.log("Tentative de connexion vers :", `${apiUrl}/api/auth/login`);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       const res = await fetch(`${apiUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier, password }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+      console.log("Statut de la réponse :", res.status);
+
       const data = await res.json();
+      console.log("Données reçues :", data);
 
       if (res.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('userId', data.user.id);
-        localStorage.setItem('username', data.user.username);
-        router.push('/');
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+          if (data.user) {
+            localStorage.setItem('userId', String(data.user.id));
+            localStorage.setItem('username', data.user.username);
+          }
+          router.push('/');
+        } else {
+          setError("Le serveur a répondu 200 mais aucun token n'a été fourni.");
+        }
       } else {
-        setError(data.message || 'Identifiants incorrects.');
+        setError(data.message || data.error || 'Identifiants incorrects.');
       }
-    } catch (err) {
-      setError('Erreur de connexion au serveur. Vérifiez que le backend est bien démarré.');
+    } catch (err: any) {
+      console.error("Erreur attrapée dans catch :", err);
+      if (err.name === 'AbortError') {
+        setError('Le serveur met trop de temps à répondre (timeout 15s).');
+      } else {
+        setError('Erreur de connexion au serveur. Ouvrez la console pour voir les détails.');
+      }
     } finally {
       setLoading(false);
     }
@@ -87,6 +108,7 @@ export default function LoginPage() {
             <span className="font-medium">{diagnosticMessage}</span>
           </div>
           <button
+            type="button"
             onClick={checkBackendHealth}
             className="underline font-semibold hover:opacity-70 ml-2"
           >
