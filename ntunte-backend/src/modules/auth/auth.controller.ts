@@ -102,9 +102,9 @@ export class AuthController {
         });
       }
 
-      // 1. Rechercher l'utilisateur par e-mail ou pseudo
+      // 1. Rechercher l'utilisateur avec la colonne correcte password_hash uniquement
       const result = await pool.query(
-        `SELECT id, username, email, password_hash, password, full_name, kyc_status
+        `SELECT id, username, email, password_hash, full_name, kyc_status
          FROM users
          WHERE LOWER(email) = LOWER($1) OR username = $1`,
         [loginId]
@@ -118,17 +118,16 @@ export class AuthController {
       }
 
       const user = result.rows[0];
-      const validHash = user.password_hash || user.password;
 
-      if (!validHash) {
+      if (!user.password_hash) {
         return res.status(401).json({
           success: false,
           message: "Compte mal configuré (aucun mot de passe enregistré). Veuillez vous réinscrire."
         });
       }
 
-      // 2. Vérifier le mot de passe de manière sécurisée
-      const isPasswordValid = await bcrypt.compare(password, validHash);
+      // 2. Vérifier le mot de passe
+      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
       if (!isPasswordValid) {
         return res.status(401).json({
           success: false,
