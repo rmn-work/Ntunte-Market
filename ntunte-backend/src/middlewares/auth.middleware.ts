@@ -3,13 +3,13 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ntunte_dev_secret_key_2026';
 
-export interface AuthRequest extends Request {
+export type AuthRequest = Request & {
   user?: {
     id: number;
     username: string;
     [key: string]: any;
   };
-}
+};
 
 export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
