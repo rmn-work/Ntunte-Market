@@ -1,26 +1,45 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.placeBidController = exports.getListingBidsController = exports.createListingController = void 0;
+exports.buyNowController = exports.placeBidController = exports.getListingBidsController = exports.createListingController = void 0;
 const database_1 = require("../../config/database");
 const createListingController = async (req, res) => {
     try {
-        const userId = req.user?.id || req.body.user_id || 1;
-        const { title, description, starting_price, category, sale_type, end_time } = req.body;
+        const userId = req.user?.id || req.body.user_id || req.body.userId || 1;
+        const { title, description, starting_price, category, sale_type, end_time, buy_now_price, allow_buy_now } = req.body;
+        const parsedStartingPrice = Number(starting_price);
+        if (isNaN(parsedStartingPrice) || parsedStartingPrice <= 0) {
+            return res.status(400).json({ success: false, message: "Le prix de départ est invalide." });
+        }
+        const normalizedSaleType = sale_type === 'AUCTION' ? 'AUCTION' : 'DIRECT';
+        const parsedBuyNow = buy_now_price !== undefined && buy_now_price !== null && buy_now_price !== ''
+            ? Number(buy_now_price)
+            : normalizedSaleType === 'DIRECT'
+                ? parsedStartingPrice
+                : null;
+        if (parsedBuyNow !== null && (isNaN(parsedBuyNow) || parsedBuyNow <= 0)) {
+            return res.status(400).json({ success: false, message: "Le prix d'achat immédiat est invalide." });
+        }
+        const canBuyNow = Boolean(allow_buy_now) || (parsedBuyNow !== null && parsedBuyNow > 0);
         const parsedEndTime = end_time ? new Date(end_time) : null;
         const finalEndTime = parsedEndTime && !isNaN(parsedEndTime.getTime()) ? parsedEndTime.toISOString() : null;
         const query = `
-      INSERT INTO listings (title, description, starting_price, category, sale_type, user_id, end_time, current_highest_bid)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $3)
+      INSERT INTO listings (
+        title, description, starting_price, category, sale_type,
+        user_id, end_time, current_highest_bid, buy_now_price, allow_buy_now, status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $3, $8, $9, 'ACTIVE')
       RETURNING *;
     `;
         const values = [
             title,
             description,
-            starting_price,
+            parsedStartingPrice,
             category || 'general',
-            sale_type || 'DIRECT',
+            normalizedSaleType,
             userId,
-            finalEndTime
+            finalEndTime,
+            parsedBuyNow,
+            canBuyNow
         ];
         const result = await database_1.pool.query(query, values);
         return res.status(201).json({
@@ -79,11 +98,14 @@ const placeBidController = async (req, res) => {
         }
         const userRes = await database_1.pool.query(`SELECT username FROM users WHERE id = $1`, [userId]);
         const bidderName = userRes.rows[0]?.username || `Utilisateur #${userId}`;
-        const listingRes = await database_1.pool.query(`SELECT user_id, starting_price, current_highest_bid, end_time FROM listings WHERE id = $1`, [id]);
+        const listingRes = await database_1.pool.query(`SELECT user_id, starting_price, current_highest_bid, end_time, status FROM listings WHERE id = $1`, [id]);
         if (listingRes.rows.length === 0) {
             return res.status(404).json({ success: false, message: "Annonce introuvable." });
         }
         const listing = listingRes.rows[0];
+        if (listing.status === 'SOLD') {
+            return res.status(400).json({ success: false, message: "Cette annonce a déjà été vendue." });
+        }
         if (String(listing.user_id) === String(userId)) {
             return res.status(403).json({
                 success: false,
@@ -121,3 +143,55 @@ const placeBidController = async (req, res) => {
     }
 };
 exports.placeBidController = placeBidController;
+const buyNowController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const buyerId = req.user?.id || req.user?.userId || req.user?.sub || req.body?.userId || req.body?.user_id;
+        if (!buyerId) {
+            return res.status(401).json({ success: false, message: "Connectez-vous pour acheter." });
+        }
+        const listingRes = await database_1.pool.query(`SELECT id, user_id, starting_price, current_highest_bid, buy_now_price, allow_buy_now, sale_type, end_time, status
+       FROM listings WHERE id = $1`, [id]);
+        if (listingRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Annonce introuvable." });
+        }
+        const listing = listingRes.rows[0];
+        if (listing.status === 'SOLD') {
+            return res.status(400).json({ success: false, message: "Cet article a déjà été vendu." });
+        }
+        if (listing.end_time && new Date(listing.end_time).getTime() < Date.now()) {
+            return res.status(400).json({ success: false, message: "Cette annonce est expirée." });
+        }
+        if (String(listing.user_id) === String(buyerId)) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous ne pouvez pas acheter votre propre annonce."
+            });
+        }
+        const finalPrice = Number(listing.buy_now_price || listing.starting_price);
+        if (!listing.allow_buy_now && !listing.buy_now_price && listing.sale_type !== 'DIRECT') {
+            return res.status(400).json({
+                success: false,
+                message: "L'option Acheter tout de suite n'est pas activée pour cette annonce."
+            });
+        }
+        await database_1.pool.query(`UPDATE listings SET status = 'SOLD', current_highest_bid = $1 WHERE id = $2`, [finalPrice, id]);
+        await database_1.pool.query(`INSERT INTO purchases (listing_id, buyer_id, amount, created_at)
+       VALUES ($1, $2, $3, NOW())`, [id, buyerId, finalPrice]).catch(() => { });
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('listing_sold', { listingId: id, buyerId, amount: finalPrice });
+        }
+        return res.status(200).json({
+            success: true,
+            message: "Achat immédiat effectué avec succès !",
+            amount: finalPrice,
+            status: 'SOLD'
+        });
+    }
+    catch (error) {
+        console.error("Erreur achat immédiat:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+};
+exports.buyNowController = buyNowController;

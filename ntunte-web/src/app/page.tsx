@@ -12,6 +12,9 @@ interface Listing {
   prix?: number;
   starting_price?: number;
   current_highest_bid?: number;
+  buy_now_price?: number | null;
+  sale_type?: 'AUCTION' | 'BUY_NOW' | 'DIRECT' | string;
+  status?: 'ACTIVE' | 'SOLD' | 'EXPIRED' | string;
   amount?: number;
   category?: string;
   created_at?: string;
@@ -28,14 +31,15 @@ export default function Home() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [startingPrice, setStartingPrice] = useState('');
+  const [buyNowPrice, setBuyNowPrice] = useState('');
   const [category, setCategory] = useState('');
+  const [saleType, setSaleType] = useState<'AUCTION' | 'BUY_NOW'>('AUCTION');
   const [customEndTime, setCustomEndTime] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
 
   useEffect(() => {
-    // Vérifier si un utilisateur est connecté via le localStorage
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('token');
       setIsLoggedIn(!!token);
@@ -87,8 +91,14 @@ export default function Home() {
     setIsSubmitting(true);
 
     try {
-      const formattedEndTime = customEndTime ? new Date(customEndTime).toISOString() : null;
+      const isAuctionChoice = saleType === 'AUCTION';
+      const parsedAuctionPrice = parseFloat(startingPrice);
+      const parsedBuyNowPrice = parseFloat(buyNowPrice);
+
+      const formattedEndTime =
+        isAuctionChoice && customEndTime ? new Date(customEndTime).toISOString() : null;
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
 
       const response = await fetch(`${apiUrl}/api/listings`, {
         method: 'POST',
@@ -99,9 +109,13 @@ export default function Home() {
         body: JSON.stringify({
           title,
           description,
-          starting_price: parseFloat(startingPrice),
+          starting_price: isAuctionChoice ? parsedAuctionPrice : parsedBuyNowPrice,
+          buy_now_price: isAuctionChoice ? null : parsedBuyNowPrice,
+          allow_buy_now: !isAuctionChoice,
           category: category || 'electronics',
+          sale_type: saleType,
           end_time: formattedEndTime,
+          ...(storedUserId ? { userId: Number(storedUserId) } : {}),
         }),
       });
 
@@ -110,7 +124,9 @@ export default function Home() {
         setTitle('');
         setDescription('');
         setStartingPrice('');
+        setBuyNowPrice('');
         setCategory('');
+        setSaleType('AUCTION');
         setCustomEndTime('');
         fetchListings();
       } else {
@@ -176,14 +192,54 @@ export default function Home() {
               rows={3}
               className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
             />
-            <input
-              type="number"
-              placeholder="Prix de départ / Enchère de départ (Fbu)"
-              value={startingPrice}
-              onChange={(e) => setStartingPrice(e.target.value)}
-              required
-              className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
-            />
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-600 font-medium">Type de vente :</label>
+              <select
+                value={saleType}
+                onChange={(e) => setSaleType(e.target.value as 'AUCTION' | 'BUY_NOW')}
+                className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 bg-white"
+              >
+                <option value="AUCTION">Achat aux enchères</option>
+                <option value="BUY_NOW">Achat tout de suite</option>
+              </select>
+            </div>
+
+            {saleType === 'AUCTION' ? (
+              <>
+                <input
+                  type="number"
+                  placeholder="Prix de départ (Fbu)"
+                  value={startingPrice}
+                  onChange={(e) => setStartingPrice(e.target.value)}
+                  required
+                  min={1}
+                  className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-600 font-medium">
+                    Date et heure de fin de l'enchère (Optionnel) :
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={customEndTime}
+                    onChange={(e) => setCustomEndTime(e.target.value)}
+                    className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 text-sm"
+                  />
+                </div>
+              </>
+            ) : (
+              <input
+                type="number"
+                placeholder="Prix d'achat tout de suite (Fbu)"
+                value={buyNowPrice}
+                onChange={(e) => setBuyNowPrice(e.target.value)}
+                required
+                min={1}
+                className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+              />
+            )}
+
             <input
               type="text"
               placeholder="Catégorie (ex: electronics)"
@@ -191,21 +247,13 @@ export default function Home() {
               onChange={(e) => setCategory(e.target.value)}
               className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
             />
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-600 font-medium">Date et heure de fin de l'enchère (Optionnel) :</label>
-              <input
-                type="datetime-local"
-                value={customEndTime}
-                onChange={(e) => setCustomEndTime(e.target.value)}
-                className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 text-sm"
-              />
-            </div>
+
             <button
               type="submit"
               disabled={isSubmitting}
               className="py-3 px-6 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition disabled:opacity-50"
             >
-              {isSubmitting ? 'Publication en cours...' : 'Publier l\'annonce'}
+              {isSubmitting ? 'Publication en cours...' : "Publier l'annonce"}
             </button>
           </form>
         </div>
@@ -225,21 +273,34 @@ export default function Home() {
             {listings.map((item: Listing, index) => {
               const itemTitle = item.title || item.titre || 'Annonce sans titre';
               const itemDescription = item.description || 'Aucune description disponible.';
-              const rawPrice =
+              const isSold = item.status === 'SOLD';
+              const isAuction = item.sale_type === 'AUCTION';
+
+              const rawAuctionPrice =
                 item.current_highest_bid ??
                 item.price ??
                 item.prix ??
                 item.starting_price ??
                 item.amount ??
                 0;
-              const numericPrice = typeof rawPrice === 'number' ? rawPrice : parseFloat(rawPrice) || 0;
-              const createdAtFormatted = item.created_at ? new Date(item.created_at).toLocaleString() : 'Récemment';
+              const numericAuctionPrice =
+                typeof rawAuctionPrice === 'number'
+                  ? rawAuctionPrice
+                  : parseFloat(String(rawAuctionPrice)) || 0;
+
+              const numericBuyNowPrice = Number(
+                item.buy_now_price ?? item.starting_price ?? item.price ?? 0
+              );
+
+              const createdAtFormatted = item.created_at
+                ? new Date(item.created_at).toLocaleString()
+                : 'Récemment';
 
               const rawEndTime = item.end_time || item.endTime || item.date_fin;
               let timeLeftText = 'Aucune fin définie';
               let isExpired = false;
 
-              if (rawEndTime) {
+              if (isAuction && rawEndTime) {
                 const endTimeMs = new Date(rawEndTime).getTime();
                 const nowMs = Date.now();
                 const diffMs = endTimeMs - nowMs;
@@ -260,6 +321,20 @@ export default function Home() {
                 }
               }
 
+              const badgeText = isSold
+                ? 'Vendu'
+                : isAuction
+                ? isExpired
+                  ? 'Terminée'
+                  : 'Achat aux enchères'
+                : 'Achat tout de suite';
+
+              const badgeClass = isSold
+                ? 'bg-gray-200 text-gray-800'
+                : isAuction && isExpired
+                ? 'bg-red-100 text-red-800'
+                : 'bg-green-100 text-green-800';
+
               return (
                 <div
                   key={item.id || index}
@@ -268,27 +343,34 @@ export default function Home() {
                   <div>
                     <div className="flex justify-between items-start gap-2 mb-2">
                       <h3 className="text-lg font-bold text-gray-900">{itemTitle}</h3>
-                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${isExpired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                        {isExpired ? 'Terminée' : 'Enchère active'}
+                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${badgeClass}`}>
+                        {badgeText}
                       </span>
                     </div>
                     <p className="text-gray-600 text-sm mt-1 line-clamp-3">{itemDescription}</p>
 
                     <div className="text-xs text-gray-500 space-y-1 mt-3 mb-3 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                       <p>📦 Publié : {createdAtFormatted}</p>
-                      <p>⏳ Temps restant : <span className="font-semibold text-gray-800">{timeLeftText}</span></p>
+                      {isAuction && (
+                        <p>
+                          ⏳ Temps restant :{' '}
+                          <span className="font-semibold text-gray-800">{timeLeftText}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="pt-2 border-t border-gray-100">
                     <p className="text-teal-700 font-bold mt-2">
-                      Offre actuelle : {numericPrice.toLocaleString()} Fbu
+                      {isAuction
+                        ? `Offre actuelle : ${numericAuctionPrice.toLocaleString()} Fbu`
+                        : `Prix : ${numericBuyNowPrice.toLocaleString()} Fbu`}
                     </p>
                     <Link
                       href={`/listings/${item.id}`}
                       className="inline-block w-full text-center mt-3 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 transition"
                     >
-                      Participer à l'enchère et voir l'historique →
+                      {isAuction ? "Participer à l'enchère →" : "Acheter tout de suite →"}
                     </Link>
                   </div>
                 </div>
