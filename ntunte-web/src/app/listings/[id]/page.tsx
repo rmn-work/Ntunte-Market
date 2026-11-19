@@ -226,9 +226,9 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
 
   const isSold = listing.status === 'SOLD';
   const currentPrice = Number(listing.current_highest_bid || listing.starting_price || 0);
-  // Prix d'achat tout de suite (ex: 15 000 Fbu si défini, ou par défaut 15000 quand allow_buy_now est actif)
-  const hasBuyNow = Boolean(listing.allow_buy_now) || (listing.buy_now_price != null && Number(listing.buy_now_price) > 0);
-  const buyNowPrice = Number(listing.buy_now_price || 15000);
+  const numericBuyNowPrice = Number(listing.buy_now_price ?? 0);
+  const hasBuyNow = Boolean(listing.allow_buy_now) || numericBuyNowPrice > 0;
+  const buyNowPrice = numericBuyNowPrice > 0 ? numericBuyNowPrice : 15000;
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
