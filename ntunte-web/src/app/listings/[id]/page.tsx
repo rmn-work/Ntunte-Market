@@ -296,7 +296,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
           </div>
         )}
 
-        {/* 1. Option Acheter tout de suite + 2. Option Enchères en dessous sur le même produit */}
+        {/* Option Acheter tout de suite + Option Enchères en dessous sur le même produit */}
         {!isSold && !isExpired && isAuthLoaded && (
           token ? (
             <div className="mt-6 space-y-5">
