@@ -25,7 +25,6 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // États pour l'authentification
   const [token, setToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [isAuthLoaded, setIsAuthLoaded] = useState(false);
@@ -165,7 +164,6 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       });
 
       const data = await res.json();
-
       if (res.ok) {
         setBidAmount('');
         setSuccessMsg("Enchère placée avec succès !");
@@ -174,7 +172,6 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
         setError(data.message || data.error || "Erreur lors de l'enregistrement de l'enchère.");
       }
     } catch (err: any) {
-      console.error('Erreur placement enchère :', err);
       setError('Erreur de connexion au serveur.');
     } finally {
       setSubmitting(false);
@@ -191,7 +188,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       return;
     }
 
-    const buyPrice = Number(listing?.buy_now_price || listing?.starting_price || 0);
+    const buyPrice = Number(listing?.buy_now_price || 15000);
     const confirmed = window.confirm(
       `Confirmer l'achat tout de suite de "${listing?.title}" pour ${buyPrice.toLocaleString()} Fbu ?`
     );
@@ -211,7 +208,6 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       });
 
       const data = await res.json();
-
       if (res.ok) {
         setSuccessMsg(data.message || "Achat tout de suite effectué avec succès !");
         await fetchData();
@@ -219,7 +215,6 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
         setError(data.message || data.error || "Erreur lors de l'achat tout de suite.");
       }
     } catch (err: any) {
-      console.error('Erreur achat tout de suite :', err);
       setError('Erreur de connexion au serveur.');
     } finally {
       setBuyingNow(false);
@@ -229,13 +224,11 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
   if (loading) return <div className="p-8 text-gray-600">Chargement de l'annonce...</div>;
   if (!listing) return <div className="p-8 text-red-600">Annonce introuvable.</div>;
 
-  // Mode exclusif choisi par le propriétaire lors de la publication :
-  // 'AUCTION' => Achat aux enchères uniquement
-  // tout autre cas ('BUY_NOW' ou 'DIRECT') => Achat tout de suite uniquement
-  const isAuctionMode = listing.sale_type === 'AUCTION';
   const isSold = listing.status === 'SOLD';
   const currentPrice = Number(listing.current_highest_bid || listing.starting_price || 0);
-  const buyNowPrice = Number(listing.buy_now_price || listing.starting_price || 0);
+  // Prix d'achat tout de suite (ex: 15 000 Fbu si défini, ou par défaut 15000 quand allow_buy_now est actif)
+  const hasBuyNow = Boolean(listing.allow_buy_now) || (listing.buy_now_price != null && Number(listing.buy_now_price) > 0);
+  const buyNowPrice = Number(listing.buy_now_price || 15000);
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
@@ -246,9 +239,6 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
 
         <div className="flex items-center gap-2 mt-4 flex-wrap">
           <h1 className="text-3xl font-bold text-gray-900">{listing.title}</h1>
-          <span className="text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-800 font-semibold">
-            {isAuctionMode ? 'Achat aux enchères' : 'Achat tout de suite'}
-          </span>
           {isSold && (
             <span className="text-xs px-3 py-1 rounded-full bg-red-100 text-red-700 font-bold">
               Vendu
@@ -262,14 +252,18 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
         </p>
 
         <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <p className="text-sm text-gray-600">
-            {isAuctionMode ? 'Enchère actuelle la plus haute :' : 'Prix achat tout de suite :'}
-          </p>
+          <p className="text-sm text-gray-600">Enchère actuelle la plus haute :</p>
           <p className="text-2xl font-bold text-teal-700 mt-1">
-            {(isAuctionMode ? currentPrice : buyNowPrice).toLocaleString()} Fbu
+            {currentPrice.toLocaleString()} Fbu
           </p>
 
-          {isAuctionMode && listing.end_time && !isExpired && !isSold && (
+          {hasBuyNow && (
+            <p className="text-sm text-emerald-700 font-semibold mt-2">
+              ⚡ Acheter tout de suite : {buyNowPrice.toLocaleString()} Fbu
+            </p>
+          )}
+
+          {listing.end_time && !isExpired && !isSold && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
               {[
                 { label: 'Jours', val: timeLeft.days },
@@ -285,7 +279,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
             </div>
           )}
 
-          {isAuctionMode && isExpired && !isSold && (
+          {isExpired && !isSold && (
             <p className="mt-4 text-sm font-semibold text-red-600">Cette enchère est terminée.</p>
           )}
         </div>
@@ -302,46 +296,53 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
           </div>
         )}
 
-        {/* Action unique selon le choix du vendeur */}
-        {!isSold && !(isAuctionMode && isExpired) && isAuthLoaded && (
+        {/* 1. Option Acheter tout de suite + 2. Option Enchères en dessous sur le même produit */}
+        {!isSold && !isExpired && isAuthLoaded && (
           token ? (
-            isAuctionMode ? (
-              <form onSubmit={handlePlaceBid} className="mt-6 flex flex-col sm:flex-row gap-3">
-                <input
-                  type="number"
-                  placeholder={`Offre > ${currentPrice} Fbu`}
-                  value={bidAmount}
-                  onChange={(e) => setBidAmount(e.target.value)}
-                  required
-                  min={currentPrice + 1}
-                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
-                />
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="py-3 px-6 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-                >
-                  {submitting ? 'Envoi...' : "Placer l'enchère"}
-                </button>
-              </form>
-            ) : (
-              <div className="mt-6">
-                <button
-                  type="button"
-                  onClick={handleBuyNow}
-                  disabled={buyingNow}
-                  className="w-full py-3 px-6 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
-                >
-                  {buyingNow
-                    ? 'Achat en cours...'
-                    : `Acheter tout de suite (${buyNowPrice.toLocaleString()} Fbu)`}
-                </button>
+            <div className="mt-6 space-y-5">
+              {hasBuyNow && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleBuyNow}
+                    disabled={buyingNow}
+                    className="w-full py-3 px-6 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
+                  >
+                    {buyingNow
+                      ? 'Achat en cours...'
+                      : `Acheter tout de suite (${buyNowPrice.toLocaleString()} Fbu)`}
+                  </button>
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-gray-200">
+                <p className="text-sm font-semibold text-gray-800 mb-2">
+                  Ou faire une enchère :
+                </p>
+                <form onSubmit={handlePlaceBid} className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="number"
+                    placeholder={`Offre > ${currentPrice} Fbu`}
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(e.target.value)}
+                    required
+                    min={currentPrice + 1}
+                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                  />
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="py-3 px-6 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                  >
+                    {submitting ? 'Envoi...' : "Placer l'enchère"}
+                  </button>
+                </form>
               </div>
-            )
+            </div>
           ) : (
             <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
               <p className="text-sm text-amber-800">
-                ⚠️ Vous devez être connecté pour {isAuctionMode ? 'enchérir' : 'acheter tout de suite'} sur cette annonce.
+                ⚠️ Connectez-vous pour acheter tout de suite ou placer une enchère.
               </p>
               <Link
                 href="/login"
@@ -353,46 +354,44 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
           )
         )}
 
-        {/* Historique des enchères uniquement pour les annonces aux enchères */}
-        {isAuctionMode && (
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <h2 className="text-lg font-bold text-gray-900 mb-3">
-              Historique des enchères ({bids.length})
-            </h2>
+        {/* Historique public des enchères */}
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <h2 className="text-lg font-bold text-gray-900 mb-3">
+            Historique des enchères ({bids.length})
+          </h2>
 
-            {bids.length === 0 ? (
-              <p className="text-sm text-gray-500 bg-gray-50 p-4 rounded-lg">
-                Aucune enchère placée pour le moment. Soyez le premier à enchérir !
-              </p>
-            ) : (
-              <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
-                {bids.map((bid, idx) => (
-                  <div
-                    key={bid.id || idx}
-                    className={`p-3.5 flex items-center justify-between ${idx === 0 ? 'bg-teal-50/60' : 'bg-white'}`}
-                  >
-                    <div>
-                      <p className="font-semibold text-sm text-gray-900 flex items-center gap-2">
-                        <span>👤 {bid.bidder_name}</span>
-                        {idx === 0 && (
-                          <span className="text-[11px] bg-teal-700 text-white px-2 py-0.5 rounded-full">
-                            Meilleure offre
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        🕒 {new Date(bid.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                    <p className="font-bold text-gray-900 text-base">
-                      {Number(bid.amount).toLocaleString()} Fbu
+          {bids.length === 0 ? (
+            <p className="text-sm text-gray-500 bg-gray-50 p-4 rounded-lg">
+              Aucune enchère placée pour le moment. Soyez le premier à enchérir !
+            </p>
+          ) : (
+            <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
+              {bids.map((bid, idx) => (
+                <div
+                  key={bid.id || idx}
+                  className={`p-3.5 flex items-center justify-between ${idx === 0 ? 'bg-teal-50/60' : 'bg-white'}`}
+                >
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900 flex items-center gap-2">
+                      <span>👤 {bid.bidder_name}</span>
+                      {idx === 0 && (
+                        <span className="text-[11px] bg-teal-700 text-white px-2 py-0.5 rounded-full">
+                          Meilleure offre
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      🕒 {new Date(bid.created_at).toLocaleString()}
                     </p>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                  <p className="font-bold text-gray-900 text-base">
+                    {Number(bid.amount).toLocaleString()} Fbu
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </main>
   );
