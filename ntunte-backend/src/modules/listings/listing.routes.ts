@@ -5,34 +5,23 @@ import {
   getListingBidsController,
   placeBidController
 } from './listing.controller';
+import { authenticateToken } from '../../middlewares/auth.middleware';
 
 const router = Router();
 
-/**
- * GET /api/listings
- */
+// GET /api/listings
 router.get('/', searchListingsController);
 
-/**
- * GET /api/listings/nearby
- */
+// GET /api/listings/nearby
 router.get('/nearby', searchListingsController);
 
-/**
- * POST /api/listings
- */
-router.post('/', createListingController);
+// POST /api/listings
+router.post('/', authenticateToken, createListingController);
 
-/**
- * GET /api/listings/:id/bids
- * Récupère l'historique des enchères (pseudo, heure, somme) pour un produit
- */
+// GET /api/listings/:id/bids
 router.get('/:id/bids', getListingBidsController);
 
-/**
- * POST /api/listings/:id/bid
- * Place une nouvelle enchère sur un produit
- */
+// POST /api/listings/:id/bid
 router.post('/:id/bid', placeBidController);
 
 export default router;

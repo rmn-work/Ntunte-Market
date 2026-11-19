@@ -23,7 +23,7 @@ const createListingController = async (req, res) => {
             finalEndTime
         ];
         const result = await database_1.pool.query(query, values);
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             message: "Annonce créée avec succès !",
             listing: result.rows[0]
@@ -31,7 +31,7 @@ const createListingController = async (req, res) => {
     }
     catch (error) {
         console.error("Erreur création annonce:", error);
-        res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({ success: false, error: error.message });
     }
 };
 exports.createListingController = createListingController;
@@ -63,9 +63,14 @@ exports.getListingBidsController = getListingBidsController;
 const placeBidController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { amount } = req.body;
+        const { amount, userId: bodyUserId } = req.body;
         const numericAmount = parseFloat(amount);
-        const userId = req.user?.id;
+        console.log('[BID] Reçu POST /api/listings/:id/bid', {
+            id,
+            body: req.body,
+            authUser: req.user
+        });
+        const userId = req.user?.id || req.user?.userId || req.user?.sub || bodyUserId || req.body?.userId;
         if (!userId) {
             return res.status(401).json({ success: false, message: 'Connectez-vous pour enchérir.' });
         }

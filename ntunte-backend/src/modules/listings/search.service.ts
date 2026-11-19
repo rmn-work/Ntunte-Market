@@ -14,7 +14,6 @@ export interface SearchFilters {
 }
 
 export class SearchService {
-
   static async searchListings(filters: SearchFilters) {
     const {
       keyword,
@@ -80,6 +79,7 @@ export class SearchService {
       queryParams.push(minPrice);
       paramIndex++;
     }
+
     if (maxPrice !== undefined) {
       sql += ` AND starting_price <= $${paramIndex}`;
       queryParams.push(maxPrice);

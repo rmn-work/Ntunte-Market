@@ -31,7 +31,6 @@ export const searchListingsController = async (req: Request, res: Response) => {
 
     const results = await SearchService.searchListings(filters);
     return res.status(200).json(results);
-
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }

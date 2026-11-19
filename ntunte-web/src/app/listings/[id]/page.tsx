@@ -11,6 +11,19 @@ interface Bid {
   created_at: string;
 }
 
+const decodeJwtPayload = (rawToken: string | null) => {
+  if (!rawToken) return null;
+  try {
+    const parts = rawToken.split('.');
+    if (parts.length !== 3) return { raw: 'Token non JWT (3 parties attendues)' };
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = atob(base64);
+    return JSON.parse(json);
+  } catch (e: any) {
+    return { decodeError: e?.message || 'Erreur décodage JWT' };
+  }
+};
+
 export default function ListingDetailPage({ params }: { params: { id: string } }) {
   const id = params.id;
 
@@ -18,10 +31,35 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
   const [bids, setBids] = useState<Bid[]>([]);
   const [bidAmount, setBidAmount] = useState('');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [isExpired, setIsExpired] = useState(false);
+  const [error, setError] = useState('');
+  const [debugInfo, setDebugInfo] = useState('');
+
+  // États pour l'authentification
+  const [token, setToken] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isAuthLoaded, setIsAuthLoaded] = useState(false);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ntunte-backend.onrender.com';
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedToken =
+        localStorage.getItem('token') ||
+        localStorage.getItem('access_token') ||
+        localStorage.getItem('jwt');
+      const storedUserId = localStorage.getItem('userId') || localStorage.getItem('id');
+
+      console.log("🔍 Diagnostic Auth - Token trouvé :", storedToken);
+      console.log("🔍 Diagnostic Auth - UserId trouvé :", storedUserId);
+
+      setToken(storedToken);
+      setUserId(storedUserId);
+      setIsAuthLoaded(true);
+    }
+  }, []);
 
   const fetchData = async () => {
     try {
@@ -90,6 +128,19 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
 
   const handlePlaceBid = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+
+    const activeToken =
+      token ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('jwt')
+        : null);
+
+    if (!activeToken) {
+      alert("Connectez-vous pour enchérir.");
+      return;
+    }
+
     const currentPrice = Number(listing?.current_highest_bid || listing?.starting_price || 0);
     const numericBid = parseFloat(bidAmount);
 
@@ -98,44 +149,60 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       return;
     }
 
-    // Recherche élargie du token dans le localStorage
-    const token = typeof window !== 'undefined'
-      ? localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('jwt')
-      : null;
-
-    const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') || 1 : 1;
-
-    console.log("Token détecté :", token); // Visible dans la console F12
-
-    if (!token) {
-      alert("Aucun jeton de connexion trouvé. Veuillez vous reconnecter.");
-      return;
-    }
+    setSubmitting(true);
+    const targetUrl = `${apiUrl}/api/listings/${id}/bid`;
+    const decodedJwt = decodeJwtPayload(activeToken);
 
     try {
-      const res = await fetch(`${apiUrl}/api/listings/${id}/bid`, {
+      const activeUserId = Number(userId || localStorage.getItem('userId') || 1);
+
+      setDebugInfo(
+        `URL=${targetUrl} | JWT=${JSON.stringify(decodedJwt)} | Envoi en cours...`
+      );
+
+      console.log("📤 Envoi de l'enchère vers :", targetUrl);
+      console.log("📦 Données envoyées :", { amount: numericBid, userId: activeUserId });
+      console.log("🔑 Token utilisé :", activeToken);
+      console.log("🔓 Payload JWT décodé :", decodedJwt);
+
+      const res = await fetch(targetUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${activeToken}`
         },
         body: JSON.stringify({
           amount: numericBid,
-          user_id: Number(currentUserId),
+          userId: activeUserId,
         }),
       });
 
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = { rawText };
+      }
+
+      console.log("📥 Réponse du serveur :", res.status, data);
+      setDebugInfo(
+        `URL=${targetUrl} | Status=${res.status} | JWT=${JSON.stringify(decodedJwt)} | Body=${JSON.stringify(data)}`
+      );
+
       if (res.ok) {
         setBidAmount('');
-        fetchData();
+        await fetchData();
         alert("Enchère placée avec succès !");
       } else {
-        alert(data.message || data.error || "Erreur lors de l'enregistrement de l'enchère.");
+        setError(`Erreur serveur (${res.status}) : ${data.message || data.error || JSON.stringify(data)}`);
       }
-    } catch (err) {
-      console.error(err);
-      alert('Erreur de connexion au serveur.');
+    } catch (err: any) {
+      console.error("❌ Erreur réseau ou catch :", err);
+      setDebugInfo(`URL=${targetUrl} | JWT=${JSON.stringify(decodedJwt)} | Catch=${err.message}`);
+      setError('Erreur de connexion au serveur : ' + err.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -147,6 +214,26 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
   return (
     <main className="min-h-screen p-8 bg-gray-50">
       <div className="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+
+        {/* PANNEAU DE DIAGNOSTIC VISUEL */}
+        <div className="mb-4 p-3 bg-gray-100 border border-gray-300 rounded-lg text-xs font-mono text-gray-700 break-all">
+          <p className="font-bold text-gray-900 mb-1">🛠️ Panneau de Diagnostic Client :</p>
+          <p>
+            Token présent :{' '}
+            <span className={token ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
+              {token ? "OUI (" + token.substring(0, 15) + "...)" : "NON (null)"}
+            </span>
+          </p>
+          <p>
+            UserId stocké : <span className="font-bold">{userId || "Aucun"}</span>
+          </p>
+          {debugInfo && (
+            <p className="mt-1 pt-1 border-t border-gray-300 text-[11px] text-gray-800">
+              {debugInfo}
+            </p>
+          )}
+        </div>
+
         <Link href="/" className="text-sm text-teal-700 hover:underline font-medium">
           ← Retour aux annonces
         </Link>
@@ -184,25 +271,46 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
           )}
         </div>
 
+        {error && (
+          <div className="mt-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+            {error}
+          </div>
+        )}
+
         {/* Formulaire pour enchérir */}
-        {!isExpired && (
-          <form onSubmit={handlePlaceBid} className="mt-6 flex flex-col sm:flex-row gap-3">
-            <input
-              type="number"
-              placeholder={`Offre > ${currentPrice} Fbu`}
-              value={bidAmount}
-              onChange={(e) => setBidAmount(e.target.value)}
-              required
-              min={currentPrice + 1}
-              className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
-            />
-            <button
-              type="submit"
-              className="py-3 px-6 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
-            >
-              Placer l'enchère
-            </button>
-          </form>
+        {isAuthLoaded && !isExpired && (
+          token ? (
+            <form onSubmit={handlePlaceBid} className="mt-6 flex flex-col sm:flex-row gap-3">
+              <input
+                type="number"
+                placeholder={`Offre > ${currentPrice} Fbu`}
+                value={bidAmount}
+                onChange={(e) => setBidAmount(e.target.value)}
+                required
+                min={currentPrice + 1}
+                className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+              />
+              <button
+                type="submit"
+                disabled={submitting}
+                className="py-3 px-6 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {submitting ? 'Envoi...' : "Placer l'enchère"}
+              </button>
+            </form>
+          ) : (
+            <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+              <p className="text-sm text-amber-800">
+                ⚠️ Vous devez être connecté pour placer une enchère sur cette annonce.
+              </p>
+              <Link
+                href="/login"
+                className="py-2 px-4 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-800 transition whitespace-nowrap ml-4"
+              >
+                Se connecter
+              </Link>
+            </div>
+          )
         )}
 
         {/* Historique public des enchères */}

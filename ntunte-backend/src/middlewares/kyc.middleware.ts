@@ -1,6 +1,5 @@
- import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction } from 'express';
 
-// Extension de l'interface Request pour inclure l'utilisateur authentifié
 interface AuthenticatedRequest extends Request {
   user?: {
     id: number;

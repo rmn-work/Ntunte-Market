@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { AuthController } from './auth.controller';
+import { authenticateToken } from '../../middlewares/auth.middleware';
 
 const router = Router();
-const authController = new AuthController();
 
-router.post('/register', authController.register.bind(authController));
-router.post('/login', authController.login.bind(authController));
+router.post('/register', AuthController.register);
+router.post('/login', AuthController.login);
+router.get('/profile', authenticateToken, AuthController.getProfileDetails);
 
 export default router;
